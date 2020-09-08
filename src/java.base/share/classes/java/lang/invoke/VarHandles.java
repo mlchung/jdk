@@ -597,7 +597,7 @@ final class VarHandles {
         if (handle instanceof DirectMethodHandle) {
             DirectMethodHandle directHandle = (DirectMethodHandle)handle;
             byte refKind = directHandle.member.getReferenceKind();
-            MethodHandles.Lookup lookup = MethodHandles.trustedLookupIn(directHandle.member.getDeclaringClass());
+            MethodHandles.Lookup lookup = MethodHandles.fullPrivilegeLookupIn(directHandle.member.getDeclaringClass());
             MethodHandleInfo info = new InfoFromMemberName(
                     lookup,
                     directHandle.member,

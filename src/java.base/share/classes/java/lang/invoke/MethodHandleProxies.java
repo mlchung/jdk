@@ -341,7 +341,7 @@ public class MethodHandleProxies {
             try {
                 // Look up the default method for special invocation thereby
                 // avoiding recursive invocation back to the proxy
-                MethodHandle mh = MethodHandles.trustedLookupIn(self.getClass())
+                MethodHandle mh = MethodHandles.fullPrivilegeLookupIn(self.getClass())
                         .findSpecial(intfc, mk.getName(),
                                      MethodType.methodType(mk.getReturnType(), mk.getParameterTypes()),
                                      self.getClass());

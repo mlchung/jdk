@@ -35,6 +35,7 @@ import java.lang.reflect.Field;
 
 import static java.lang.invoke.MethodHandleNatives.Constants.*;
 import static java.lang.invoke.MethodHandleStatics.TRACE_METHOD_LINKAGE;
+import static java.lang.invoke.MethodHandles.Lookup.IMPL_LOOKUP;
 
 /**
  * The JVM interface for the method handles package is all here.
@@ -608,9 +609,8 @@ class MethodHandleNatives {
     static MethodHandle linkMethodHandleConstant(Class<?> callerClass, int refKind,
                                                  Class<?> defc, String name, Object type) {
         try {
-            Lookup lookup = MethodHandles.trustedLookupIn(callerClass);
             assert(refKindIsValid(refKind));
-            return lookup.linkMethodHandleConstant((byte) refKind, defc, name, type);
+            return IMPL_LOOKUP.linkMethodHandleConstant((byte) refKind, defc, name, type);
         } catch (ReflectiveOperationException ex) {
             throw mapLookupExceptionToError(ex);
         }

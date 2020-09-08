@@ -57,7 +57,7 @@ final class BootstrapMethodInvoker {
                         Object info,
                         // Caller information:
                         Class<?> callerClass) {
-        Lookup caller = MethodHandles.trustedLookupIn(callerClass);
+        Lookup caller = MethodHandles.fullPrivilegeLookupIn(callerClass);
         Object result;
         boolean pullMode = isPullModeBSM(bootstrapMethod);  // default value is false
         boolean vmIsPushing = !staticArgumentsPulled(info); // default value is true

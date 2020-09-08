@@ -127,10 +127,17 @@ public class MethodHandles {
         return new Lookup(caller);
     }
 
-    /* package */ static Lookup trustedLookupIn(Class<?> requestLookupClass) {
-        return Lookup.IMPL_LOOKUP.in(requestLookupClass);
+    /*
+     * Returns a Lookup object in {@code requestedLookupClass} with
+     * full privileges.
+     */
+    /* package */ static Lookup fullPrivilegeLookupIn(Class<?> requestedLookupClass) {
+        return new Lookup(requestedLookupClass);
     }
 
+    /*
+     * Cracks a direct method handle using a trusted Lookup
+     */
     /* package */ static MethodHandleInfo revealDirect(MethodHandle target) {
         return Lookup.IMPL_LOOKUP.revealDirect(target);
     }
@@ -2276,7 +2283,7 @@ public class MethodHandles {
         static { IMPL_NAMES.getClass(); }
 
         /** Package-private version of lookup which is trusted. */
-        private static final Lookup IMPL_LOOKUP = new Lookup(Object.class, null, TRUSTED);
+        static final Lookup IMPL_LOOKUP = new Lookup(Object.class, null, TRUSTED);
 
         /** Version of lookup which is trusted minimally.
          *  It can only be used to create method handles to publicly accessible

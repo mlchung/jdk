@@ -1174,7 +1174,7 @@ abstract class MethodHandleImpl {
                     // use the original class name
                     name = name.replace('/', '_');
                 }
-                MethodHandles.Lookup invokerClassLookup = MethodHandles.trustedLookupIn(targetClass)
+                MethodHandles.Lookup invokerClassLookup = MethodHandles.fullPrivilegeLookupIn(targetClass)
                         .makeHiddenClassDefiner(name, INJECTED_INVOKER_TEMPLATE)
                         .defineClassAsLookup(true);
                 Class<?> invokerClass = invokerClassLookup.lookupClass();

@@ -52,7 +52,6 @@ import static java.lang.invoke.LambdaForm.BasicType.*;
 import static java.lang.invoke.LambdaForm.*;
 import static java.lang.invoke.MethodHandleNatives.Constants.*;
 import static java.lang.invoke.MethodHandleStatics.*;
-import static java.lang.invoke.MethodHandles.Lookup.*;
 
 /**
  * Code generation backend for LambdaForm.
@@ -106,7 +105,7 @@ class InvokerBytecodeGenerator {
 
     private static final MemberName.Factory MEMBERNAME_FACTORY = MemberName.getFactory();
     private static final Class<?> HOST_CLASS = LambdaForm.class;
-    private static final MethodHandles.Lookup LOOKUP = MethodHandles.trustedLookupIn(HOST_CLASS);
+    private static final MethodHandles.Lookup LOOKUP = MethodHandles.fullPrivilegeLookupIn(HOST_CLASS);
 
     /** Main constructor; other constructors delegate to this one. */
     private InvokerBytecodeGenerator(LambdaForm lambdaForm, int localsMapSize,
