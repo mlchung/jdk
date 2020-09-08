@@ -583,14 +583,14 @@ public class MethodHandles {
      * methods as if they were normal methods, but the JVM bytecode verifier rejects them.
      * A lookup of such an internal method will produce a {@code NoSuchMethodException}.
      * <p>
-     * If the relationship between nested types is expressed directly through the
-     * {@code NestHost} and {@code NestMembers} attributes
-     * (see the Java Virtual Machine Specification, sections {@jvms
-     * 4.7.28} and {@jvms 4.7.29}),
-     * then the associated {@code Lookup} object provides direct access to
+     * The relationship between nested types (JLS {@jls 8}) should be expressed
+     * directly through the {@code NestHost} and {@code NestMembers} attributes
+     * (see JVMS {@jvms 4.7.28} and {@jvms 4.7.29}).
+     * The associated {@code Lookup} object provides direct access to
      * the lookup class and all of its nestmates
-     * (see {@link java.lang.Class#getNestHost Class.getNestHost}).
-     * Otherwise, access between nested classes is obtained by the Java compiler creating
+     * (see {@link java.lang.Class#getNestHost Class::getNestHost}).
+     * Prior to Java SE 11,
+     * access between nested classes is obtained by the Java compiler creating
      * a wrapper method to access a private method of another class in the same nest.
      * For example, a nested class {@code C.D}
      * can access private members within other related classes such as
@@ -600,7 +600,9 @@ public class MethodHandles {
      * {@code C.E} would be unable to access those private members.
      * A workaround for this limitation is the {@link Lookup#in Lookup.in} method,
      * which can transform a lookup on {@code C.E} into one on any of those other
-     * classes, without special elevation of privilege.
+     * classes, without special elevation of privilege.  This workaround
+     * only supports classes whose class file version is older than 59
+     * and without {@code NestHost} and {@code NestMembers} attributes.
      * <p>
      * The accesses permitted to a given lookup object may be limited,
      * according to its set of {@link #lookupModes lookupModes},
@@ -628,8 +630,8 @@ public class MethodHandles {
      * <li>create method handles which {@link Lookup#findSpecial emulate invokespecial} instructions
      * <li>avoid <a href="MethodHandles.Lookup.html#secmgr">package access checks</a>
      *     for classes accessible to the lookup class
-     * <li>create {@link Lookup#in delegated lookup objects} which have private access to other classes
-     *     within the same package member
+     * <li>create {@linkplain Lookup#in delegated lookup objects} which have private access to
+     *     other classes in the same nest
      * </ul>
      * <p style="font-size:smaller;">
      * Similarly, a lookup with module access ensures that the original lookup creator was
@@ -1482,11 +1484,27 @@ public class MethodHandles {
          * <li>If the new lookup class is in a different package
          * than the old one, protected and default (package) members will not be accessible,
          * i.e. {@link #PROTECTED PROTECTED} and {@link #PACKAGE PACKAGE} access are lost.
-         * <li>If the new lookup class is not within the same package member
-         * as the old one, private members will not be accessible, and protected members
+         * <li>If the new lookup class is the new lookup class is not a
+         *     {@linkplain Class#isNestmateOf(Class) nestmate} of the old one and
+         *     not within the same package member as the old one (see the constraints below),
+         * then private members will not be accessible, and protected members
          * will not be accessible by virtue of inheritance,
          * i.e. {@link #PRIVATE PRIVATE} access is lost.
          * (Protected members may continue to be accessible because of package sharing.)
+         * <p>
+         * The same package member check is a workaround for nested types whose
+         * relationship is not expressed as nestmates if and only if the
+         * new and old lookup classes meet the following criteria:
+         * <ul>
+         * <li>the new lookup class and the old one are of class file version &lt; 59; and</li>
+         * <li>the new lookup class and the old one have no {@code NestHost} and
+         *     {@code NestMembers} attribute.</li>
+         * </ul>
+         * If the new lookup class and old lookup class do not meet these criteria,
+         * the same package member check will not be applied.  Private members
+         * will only be accessible if the new lookup class and the old one 
+         * are {@linkplain Class#isNestmateOf(Class) nestmates}.
+         *
          * <li>If the new lookup class is not
          * {@linkplain #accessClass(Class) accessible} to this lookup,
          * then no members, not even public members, will be accessible
@@ -1510,7 +1528,7 @@ public class MethodHandles {
          * (used during {@link #findClass} invocations)
          * are determined by the lookup class' loader,
          * which may change due to this operation.
-         * <p>
+         *
          * @param requestedLookupClass the desired lookup class for the new lookup object
          * @return a lookup object which reports the desired lookup class, or the same object
          * if there is no change
@@ -1557,7 +1575,11 @@ public class MethodHandles {
             }
             // Allow nestmate lookups to be created without special privilege:
             if ((newModes & PRIVATE) != 0
-                    && !VerifyAccess.isSamePackageMember(this.lookupClass, requestedLookupClass)) {
+                    && !this.lookupClass.isNestmateOf(requestedLookupClass)
+                    // only classes of older version < 59 can be teleported to same package member
+                    // without special elevation of privilege
+                    && !(MethodHandleNatives.canTeleportToSamePackageMember(lookupClass, requestedLookupClass)
+                         && VerifyAccess.isSamePackageMember(this.lookupClass, requestedLookupClass))) {
                 newModes &= ~(PRIVATE|PROTECTED);
             }
             if ((newModes & (PUBLIC|UNCONDITIONAL)) != 0
@@ -1644,7 +1666,7 @@ public class MethodHandles {
          * by the <em>The Java Virtual Machine Specification</em>) with a class name in the
          * same package as the lookup class. </p>
          *
-         * <p> This method does not run the class initializer. The class initializer may
+         <p> This method does not run the class initializer. The class initializer may
          * run at a later time, as detailed in section 12.4 of the <em>The Java Language
          * Specification</em>. </p>
          *

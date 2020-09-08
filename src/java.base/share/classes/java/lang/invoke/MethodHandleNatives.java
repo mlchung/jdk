@@ -689,4 +689,15 @@ class MethodHandleNatives {
     static Object classData(Class<?> c) {
         return JLA.classData(c);
     }
+
+    /**
+     * Returns true if and only if c1 and c2 are of the same runtime package
+     * and of class file version < 59 and
+     * they do not have NestHost or NestMembers attribute.
+     *
+     * If either one class is of cf version >= 59 or has NestHost and NestMembers
+     * attribute, then Lookup::in can transform from a lookup on C to one of
+     * the nestmates.
+     */
+    static native boolean canTeleportToSamePackageMember(Class<?> c1, Class<?> c2);
 }

@@ -1497,6 +1497,22 @@ JVM_ENTRY(void, MHN_clearCallSiteContext(JNIEnv* env, jobject igcls, jobject con
 JVM_END
 
 /**
+ * Returns true if and only if c1 and c2 are of the same runtime package and 
+ * of class file version < 59 and they do not have NestHost or NestMembers attribute.
+ */
+JVM_ENTRY(jboolean, MHN_canTeleportToSamePackageMember(JNIEnv* env, jobject igcls, jclass c1, jclass c2)) {
+   InstanceKlass* ik1 = InstanceKlass::cast(java_lang_Class::as_Klass(JNIHandles::resolve_non_null(c1)));
+   InstanceKlass* ik2 = InstanceKlass::cast(java_lang_Class::as_Klass(JNIHandles::resolve_non_null(c2)));
+   if (!ik1->is_same_class_package(ik2)) return false;
+   if (ik1->major_version() >= 59 || ik2->major_version() >= 59) return false;
+   if (ik1->nest_host_index() > 0 || ik2->nest_host_index() > 0) return false;
+   if (ik1->nest_members() != NULL && ik1->nest_members() != Universe::the_empty_short_array()) return false;
+   if (ik2->nest_members() != NULL && ik2->nest_members() != Universe::the_empty_short_array()) return false;
+   return true;
+}
+JVM_END
+
+/**
  * Throws a java/lang/UnsupportedOperationException unconditionally.
  * This is required by the specification of MethodHandle.invoke if
  * invoked directly.
@@ -1551,8 +1567,9 @@ static JNINativeMethod MHN_methods[] = {
   {CC "copyOutBootstrapArguments", CC "(" CLS "[III[" OBJ "IZ" OBJ ")V",     FN_PTR(MHN_copyOutBootstrapArguments)},
   {CC "clearCallSiteContext",      CC "(" CTX ")V",                          FN_PTR(MHN_clearCallSiteContext)},
   {CC "staticFieldOffset",         CC "(" MEM ")J",                          FN_PTR(MHN_staticFieldOffset)},
-  {CC "staticFieldBase",           CC "(" MEM ")" OBJ,                        FN_PTR(MHN_staticFieldBase)},
-  {CC "getMemberVMInfo",           CC "(" MEM ")" OBJ,                       FN_PTR(MHN_getMemberVMInfo)}
+  {CC "staticFieldBase",           CC "(" MEM ")" OBJ,                       FN_PTR(MHN_staticFieldBase)},
+  {CC "getMemberVMInfo",           CC "(" MEM ")" OBJ,                       FN_PTR(MHN_getMemberVMInfo)},
+  {CC "canTeleportToSamePackageMember",    CC "(" CLS CLS ")Z",              FN_PTR(MHN_canTeleportToSamePackageMember)}
 };
 
 static JNINativeMethod MH_methods[] = {
