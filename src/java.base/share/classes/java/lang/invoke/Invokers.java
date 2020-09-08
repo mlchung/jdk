@@ -34,7 +34,6 @@ import java.util.Arrays;
 
 import static java.lang.invoke.MethodHandleStatics.*;
 import static java.lang.invoke.MethodHandleNatives.Constants.*;
-import static java.lang.invoke.MethodHandles.Lookup.IMPL_LOOKUP;
 import static java.lang.invoke.LambdaForm.*;
 import static java.lang.invoke.LambdaForm.Kind.*;
 
@@ -45,6 +44,7 @@ import static java.lang.invoke.LambdaForm.Kind.*;
 class Invokers {
     // exact type (sans leading target MH) for the outgoing call
     private final MethodType targetType;
+    private final static MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
 
     // Cached adapter information:
     private final @Stable MethodHandle[] invokers = new MethodHandle[INV_LIMIT];
@@ -164,7 +164,7 @@ class Invokers {
         assert(basicType == basicType.basicType());
         try {
             //Lookup.findVirtual(MethodHandle.class, name, type);
-            return IMPL_LOOKUP.resolveOrFail(REF_invokeVirtual, MethodHandle.class, "invokeBasic", basicType);
+            return LOOKUP.resolveOrFail(REF_invokeVirtual, MethodHandle.class, "invokeBasic", basicType);
         } catch (ReflectiveOperationException ex) {
             throw newInternalError("JVM cannot find invoker for "+basicType, ex);
         }
@@ -669,7 +669,7 @@ class Invokers {
 
         static {
             try {
-                MH_asSpreader = IMPL_LOOKUP.findVirtual(MethodHandle.class, "asSpreader",
+                MH_asSpreader = LOOKUP.findVirtual(MethodHandle.class, "asSpreader",
                         MethodType.methodType(MethodHandle.class, Class.class, int.class));
             } catch (ReflectiveOperationException ex) {
                 throw newInternalError(ex);

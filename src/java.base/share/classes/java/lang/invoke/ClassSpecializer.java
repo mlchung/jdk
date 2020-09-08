@@ -51,7 +51,7 @@ import static java.lang.invoke.LambdaForm.*;
 import static java.lang.invoke.MethodHandleNatives.Constants.REF_getStatic;
 import static java.lang.invoke.MethodHandleNatives.Constants.REF_putStatic;
 import static java.lang.invoke.MethodHandleStatics.*;
-import static java.lang.invoke.MethodHandles.Lookup.IMPL_LOOKUP;
+import static java.lang.invoke.MethodHandles.trustedLookupIn;
 import static jdk.internal.org.objectweb.asm.Opcodes.*;
 
 /**
@@ -883,7 +883,7 @@ abstract class ClassSpecializer<T,K,S extends ClassSpecializer<T,K,S>.SpeciesDat
             Class<?> fieldType = types.get(index);
             String fieldName = chooseFieldName(fieldType, index);
             try {
-                return IMPL_LOOKUP.findGetter(speciesCode, fieldName, fieldType);
+                return trustedLookupIn(speciesCode).findGetter(speciesCode, fieldName, fieldType);
             } catch (NoSuchFieldException | IllegalAccessException e) {
                 throw newInternalError(e);
             }
@@ -933,7 +933,7 @@ abstract class ClassSpecializer<T,K,S extends ClassSpecializer<T,K,S>.SpeciesDat
 
         private S readSpeciesDataFromCode(Class<? extends T> speciesCode) {
             try {
-                MemberName sdField = IMPL_LOOKUP.resolveOrFail(REF_getStatic, speciesCode, sdFieldName, metaType);
+                MemberName sdField = trustedLookupIn(speciesCode).resolveOrFail(REF_getStatic, speciesCode, sdFieldName, metaType);
                 Object base = MethodHandleNatives.staticFieldBase(sdField);
                 long offset = MethodHandleNatives.staticFieldOffset(sdField);
                 UNSAFE.loadFence();
@@ -963,7 +963,7 @@ abstract class ClassSpecializer<T,K,S extends ClassSpecializer<T,K,S>.SpeciesDat
                 assert(readSpeciesDataFromCode(speciesCode) == null ||
                     (salvage && readSpeciesDataFromCode(speciesCode).equals(speciesData)));
 
-                MemberName sdField = IMPL_LOOKUP.resolveOrFail(REF_putStatic, speciesCode, sdFieldName, metaType);
+                MemberName sdField = trustedLookupIn(speciesCode).resolveOrFail(REF_putStatic, speciesCode, sdFieldName, metaType);
                 Object base = MethodHandleNatives.staticFieldBase(sdField);
                 long offset = MethodHandleNatives.staticFieldOffset(sdField);
                 UNSAFE.storeFence();
@@ -992,7 +992,7 @@ abstract class ClassSpecializer<T,K,S extends ClassSpecializer<T,K,S>.SpeciesDat
         MethodHandle findFactory(Class<? extends T> speciesCode, List<Class<?>> types) {
             final MethodType type = baseConstructorType().changeReturnType(topClass()).appendParameterTypes(types);
             try {
-                return IMPL_LOOKUP.findStatic(speciesCode, "make", type);
+                return trustedLookupIn(speciesCode).findStatic(speciesCode, "make", type);
             } catch (NoSuchMethodException | IllegalAccessException | IllegalArgumentException | TypeNotPresentException e) {
                 throw newInternalError(e);
             }

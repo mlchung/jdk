@@ -597,18 +597,19 @@ final class VarHandles {
         if (handle instanceof DirectMethodHandle) {
             DirectMethodHandle directHandle = (DirectMethodHandle)handle;
             byte refKind = directHandle.member.getReferenceKind();
+            MethodHandles.Lookup lookup = MethodHandles.trustedLookupIn(directHandle.member.getDeclaringClass());
             MethodHandleInfo info = new InfoFromMemberName(
-                    MethodHandles.Lookup.IMPL_LOOKUP,
+                    lookup,
                     directHandle.member,
                     refKind);
             final Class<?>[] exceptionTypes;
             if (MethodHandleNatives.refKindIsMethod(refKind)) {
-                exceptionTypes = info.reflectAs(Method.class, MethodHandles.Lookup.IMPL_LOOKUP)
+                exceptionTypes = info.reflectAs(Method.class, lookup)
                         .getExceptionTypes();
             } else if (MethodHandleNatives.refKindIsField(refKind)) {
                 exceptionTypes = null;
             } else if (MethodHandleNatives.refKindIsConstructor(refKind)) {
-                exceptionTypes = info.reflectAs(Constructor.class, MethodHandles.Lookup.IMPL_LOOKUP)
+                exceptionTypes = info.reflectAs(Constructor.class, lookup)
                         .getExceptionTypes();
             } else {
                 throw new AssertionError("Cannot get here");

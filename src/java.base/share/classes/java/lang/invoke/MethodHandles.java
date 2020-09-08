@@ -127,6 +127,14 @@ public class MethodHandles {
         return new Lookup(caller);
     }
 
+    /* package */ static Lookup trustedLookupIn(Class<?> requestLookupClass) {
+        return Lookup.IMPL_LOOKUP.in(requestLookupClass);
+    }
+
+    /* package */ static MethodHandleInfo revealDirect(MethodHandle target) {
+        return Lookup.IMPL_LOOKUP.revealDirect(target);
+    }
+
     /**
      * Returns a {@link Lookup lookup object} which is trusted minimally.
      * The lookup has the {@code UNCONDITIONAL} mode.
@@ -1449,7 +1457,7 @@ public class MethodHandles {
          * Must be called by from a method in this package,
          * which in turn is called by a method not in this package.
          */
-        Lookup(Class<?> lookupClass) {
+        private Lookup(Class<?> lookupClass) {
             this(lookupClass, null, FULL_POWER_MODES);
         }
 
@@ -1463,8 +1471,6 @@ public class MethodHandles {
         }
 
         private static Lookup newLookup(Class<?> lookupClass, Class<?> prevLookupClass, int allowedModes) {
-            // make sure we haven't accidentally picked up a privileged class:
-            checkUnprivilegedlookupClass(lookupClass);
             return new Lookup(lookupClass, prevLookupClass, allowedModes);
         }
 
@@ -2270,19 +2276,13 @@ public class MethodHandles {
         static { IMPL_NAMES.getClass(); }
 
         /** Package-private version of lookup which is trusted. */
-        static final Lookup IMPL_LOOKUP = new Lookup(Object.class, null, TRUSTED);
+        private static final Lookup IMPL_LOOKUP = new Lookup(Object.class, null, TRUSTED);
 
         /** Version of lookup which is trusted minimally.
          *  It can only be used to create method handles to publicly accessible
          *  members in packages that are exported unconditionally.
          */
-        static final Lookup PUBLIC_LOOKUP = new Lookup(Object.class, null, UNCONDITIONAL);
-
-        private static void checkUnprivilegedlookupClass(Class<?> lookupClass) {
-            String name = lookupClass.getName();
-            if (name.startsWith("java.lang.invoke."))
-                throw newIllegalArgumentException("illegal lookupClass: "+lookupClass);
-        }
+        private static final Lookup PUBLIC_LOOKUP = new Lookup(Object.class, null, UNCONDITIONAL);
 
         /**
          * Displays the name of the class from which lookups are to be made,

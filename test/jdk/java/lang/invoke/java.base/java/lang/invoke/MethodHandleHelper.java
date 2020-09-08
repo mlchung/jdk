@@ -24,6 +24,7 @@
 package java.lang.invoke;
 
 import java.lang.invoke.MethodHandles.Lookup;
+import java.lang.reflect.Field;
 
 /**
  * Helper class to inject into java.lang.invoke that provides access to
@@ -34,7 +35,7 @@ public class MethodHandleHelper {
 
     private MethodHandleHelper() { }
 
-    public static final Lookup IMPL_LOOKUP = Lookup.IMPL_LOOKUP;
+    public static final Lookup IMPL_LOOKUP = getImplLookup();
 
     public static void customize(MethodHandle mh) {
         mh.customize();
@@ -48,5 +49,14 @@ public class MethodHandleHelper {
         return MethodHandleImpl.varargsArray(arrayType, nargs);
     }
 
+    private static Lookup getImplLookup() {
+        try {
+            Field field = MethodHandles.Lookup.class.getDeclaredField("IMPL_LOOKUP");
+            field.setAccessible(true);
+            return (Lookup) field.get(null);
+        } catch (ReflectiveOperationException ex) {
+            throw new Error(ex);
+        }
+    }
 }
 

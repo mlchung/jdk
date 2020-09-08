@@ -30,7 +30,6 @@ import jdk.internal.HotSpotIntrinsicCandidate;
 
 import java.lang.constant.ClassDesc;
 import java.lang.constant.Constable;
-import java.lang.constant.ConstantDesc;
 import java.lang.constant.DirectMethodHandleDesc;
 import java.lang.constant.MethodHandleDesc;
 import java.lang.constant.MethodTypeDesc;
@@ -40,7 +39,6 @@ import java.util.Optional;
 
 import static java.lang.invoke.MethodHandleInfo.*;
 import static java.lang.invoke.MethodHandleStatics.*;
-import static java.lang.invoke.MethodHandles.Lookup.IMPL_LOOKUP;
 
 /**
  * A method handle is a typed, directly executable reference to an underlying method,
@@ -1549,7 +1547,7 @@ assertEquals("[three, thee, tee]", asListFix.invoke((Object)argv).toString());
         MethodTypeDesc type;
         boolean isInterface;
         try {
-            info = IMPL_LOOKUP.revealDirect(this);
+            info = MethodHandles.revealDirect(this);
             isInterface = info.getDeclaringClass().isInterface();
             owner = info.getDeclaringClass().describeConstable().orElseThrow();
             type = info.getMethodType().describeConstable().orElseThrow();

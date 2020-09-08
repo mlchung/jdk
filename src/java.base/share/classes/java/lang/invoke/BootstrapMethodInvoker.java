@@ -27,14 +27,13 @@ package java.lang.invoke;
 import sun.invoke.util.Wrapper;
 
 import java.lang.invoke.AbstractConstantGroup.BSCIWithCache;
+import java.lang.invoke.MethodHandles.Lookup;
 import java.util.Arrays;
 
 import static java.lang.invoke.BootstrapCallInfo.makeBootstrapCallInfo;
 import static java.lang.invoke.ConstantGroup.makeConstantGroup;
 import static java.lang.invoke.MethodHandleNatives.*;
 import static java.lang.invoke.MethodHandleStatics.TRACE_METHOD_LINKAGE;
-import static java.lang.invoke.MethodHandles.Lookup;
-import static java.lang.invoke.MethodHandles.Lookup.IMPL_LOOKUP;
 
 final class BootstrapMethodInvoker {
 
@@ -58,7 +57,7 @@ final class BootstrapMethodInvoker {
                         Object info,
                         // Caller information:
                         Class<?> callerClass) {
-        MethodHandles.Lookup caller = IMPL_LOOKUP.in(callerClass);
+        Lookup caller = MethodHandles.trustedLookupIn(callerClass);
         Object result;
         boolean pullMode = isPullModeBSM(bootstrapMethod);  // default value is false
         boolean vmIsPushing = !staticArgumentsPulled(info); // default value is true
@@ -477,7 +476,7 @@ final class BootstrapMethodInvoker {
         static {
             final Class<?> THIS_CLASS = PushAdapter.class;
             try {
-                MH_pushToBootstrapMethod = IMPL_LOOKUP
+                MH_pushToBootstrapMethod = MethodHandles.lookup()
                     .findStatic(THIS_CLASS, "pushToBootstrapMethod",
                                 MethodType.methodType(Object.class, MethodHandle.class,
                                         Lookup.class, String.class, Object.class, Object[].class));
@@ -542,7 +541,7 @@ final class BootstrapMethodInvoker {
         static {
             final Class<?> THIS_CLASS = PullAdapter.class;
             try {
-                MH_pullFromBootstrapMethod = IMPL_LOOKUP
+                MH_pullFromBootstrapMethod = MethodHandles.lookup()
                     .findStatic(THIS_CLASS, "pullFromBootstrapMethod",
                                 MethodType.methodType(Object.class, MethodHandle.class,
                                         Lookup.class, BootstrapCallInfo.class));

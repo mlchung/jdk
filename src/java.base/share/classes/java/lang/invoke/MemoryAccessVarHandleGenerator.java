@@ -81,6 +81,8 @@ import static jdk.internal.org.objectweb.asm.Opcodes.T_LONG;
 import static jdk.internal.org.objectweb.asm.Opcodes.V14;
 
 class MemoryAccessVarHandleGenerator {
+    private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
+
     private static final String DEBUG_DUMP_CLASSES_DIR_PROPERTY = "jdk.internal.foreign.ClassGenerator.DEBUG_DUMP_CLASSES_DIR";
 
     private static final boolean DEBUG =
@@ -108,8 +110,8 @@ class MemoryAccessVarHandleGenerator {
         OFFSET_OP_TYPE = MethodType.methodType(long.class, long.class, long.class, MemoryAddressProxy.class);
 
         try {
-            ADD_OFFSETS_HANDLE = MethodHandles.Lookup.IMPL_LOOKUP.findStatic(MemoryAddressProxy.class, "addOffsets", OFFSET_OP_TYPE);
-            MUL_OFFSETS_HANDLE = MethodHandles.Lookup.IMPL_LOOKUP.findStatic(MemoryAddressProxy.class, "multiplyOffsets", OFFSET_OP_TYPE);
+            ADD_OFFSETS_HANDLE = LOOKUP.findStatic(MemoryAddressProxy.class, "addOffsets", OFFSET_OP_TYPE);
+            MUL_OFFSETS_HANDLE = LOOKUP.findStatic(MemoryAddressProxy.class, "multiplyOffsets", OFFSET_OP_TYPE);
         } catch (Throwable ex) {
             throw new ExceptionInInitializerError(ex);
         }
@@ -311,11 +313,7 @@ class MemoryAccessVarHandleGenerator {
             }
             //try to resolve...
             String helperMethodName = methName + "0";
-            MethodHandles.Lookup.IMPL_LOOKUP
-                    .findStatic(helperClass,
-                            helperMethodName,
-                            helperType);
-
+            LOOKUP.findStatic(helperClass, helperMethodName, helperType);
 
             MethodVisitor mv = cw.visitMethod(ACC_STATIC, methName, methType.toMethodDescriptorString(), null, null);
             mv.visitAnnotation(Type.getDescriptor(ForceInline.class), true);

@@ -341,10 +341,10 @@ public class MethodHandleProxies {
             try {
                 // Look up the default method for special invocation thereby
                 // avoiding recursive invocation back to the proxy
-                MethodHandle mh = MethodHandles.Lookup.IMPL_LOOKUP.findSpecial(
-                        intfc, mk.getName(),
-                        MethodType.methodType(mk.getReturnType(), mk.getParameterTypes()),
-                        self.getClass());
+                MethodHandle mh = MethodHandles.trustedLookupIn(self.getClass())
+                        .findSpecial(intfc, mk.getName(),
+                                     MethodType.methodType(mk.getReturnType(), mk.getParameterTypes()),
+                                     self.getClass());
                 return mh.asSpreader(Object[].class, mk.getParameterCount());
             } catch (NoSuchMethodException | IllegalAccessException e) {
                 // The method is known to exist and should be accessible, this

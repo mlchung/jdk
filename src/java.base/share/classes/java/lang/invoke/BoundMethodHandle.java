@@ -34,9 +34,6 @@ import java.util.List;
 import static java.lang.invoke.LambdaForm.BasicType;
 import static java.lang.invoke.LambdaForm.BasicType.*;
 import static java.lang.invoke.LambdaForm.BasicType.V_TYPE_NUM;
-import static java.lang.invoke.LambdaForm.BasicType.V_TYPE_NUM;
-import static java.lang.invoke.LambdaForm.BasicType.V_TYPE_NUM;
-import static java.lang.invoke.MethodHandles.Lookup.IMPL_LOOKUP;
 import static java.lang.invoke.MethodHandleNatives.Constants.*;
 import static java.lang.invoke.MethodHandleStatics.newInternalError;
 import static java.lang.invoke.MethodHandleStatics.uncaughtException;
@@ -379,6 +376,7 @@ abstract class BoundMethodHandle extends MethodHandle {
     }
 
     /*non-public*/
+    static final MethodHandles.Lookup BMH_LOOKUP = MethodHandles.lookup();
     static final Specializer SPECIALIZER = new Specializer();
     static {
         SimpleMethodHandle.BMH_SPECIES = BoundMethodHandle.SPECIALIZER.findSpecies("");
@@ -388,12 +386,11 @@ abstract class BoundMethodHandle extends MethodHandle {
     /*non-public*/
     static final class Specializer
             extends ClassSpecializer<BoundMethodHandle, String, SpeciesData> {
-
         private static final MemberName SPECIES_DATA_ACCESSOR;
 
         static {
             try {
-                SPECIES_DATA_ACCESSOR = IMPL_LOOKUP.resolveOrFail(REF_invokeVirtual, BoundMethodHandle.class,
+                SPECIES_DATA_ACCESSOR = BMH_LOOKUP.resolveOrFail(REF_invokeVirtual, BoundMethodHandle.class,
                         "speciesData", MethodType.methodType(BoundMethodHandle.SpeciesData.class));
             } catch (ReflectiveOperationException ex) {
                 throw newInternalError("Bootstrap link error", ex);
@@ -428,12 +425,12 @@ abstract class BoundMethodHandle extends MethodHandle {
             // copyWithExtendLIJFD + copyWith
             try {
                 BMH_TRANSFORMS = List.of(
-                        IMPL_LOOKUP.resolveOrFail(REF_invokeVirtual, BMH, "copyWithExtendL", MethodType.methodType(BMH, MethodType.class, LambdaForm.class, Object.class)),
-                        IMPL_LOOKUP.resolveOrFail(REF_invokeVirtual, BMH, "copyWithExtendI", MethodType.methodType(BMH, MethodType.class, LambdaForm.class, int.class)),
-                        IMPL_LOOKUP.resolveOrFail(REF_invokeVirtual, BMH, "copyWithExtendJ", MethodType.methodType(BMH, MethodType.class, LambdaForm.class, long.class)),
-                        IMPL_LOOKUP.resolveOrFail(REF_invokeVirtual, BMH, "copyWithExtendF", MethodType.methodType(BMH, MethodType.class, LambdaForm.class, float.class)),
-                        IMPL_LOOKUP.resolveOrFail(REF_invokeVirtual, BMH, "copyWithExtendD", MethodType.methodType(BMH, MethodType.class, LambdaForm.class, double.class)),
-                        IMPL_LOOKUP.resolveOrFail(REF_invokeVirtual, BMH, "copyWith", MethodType.methodType(BMH, MethodType.class, LambdaForm.class))
+                        BMH_LOOKUP.resolveOrFail(REF_invokeVirtual, BMH, "copyWithExtendL", MethodType.methodType(BMH, MethodType.class, LambdaForm.class, Object.class)),
+                        BMH_LOOKUP.resolveOrFail(REF_invokeVirtual, BMH, "copyWithExtendI", MethodType.methodType(BMH, MethodType.class, LambdaForm.class, int.class)),
+                        BMH_LOOKUP.resolveOrFail(REF_invokeVirtual, BMH, "copyWithExtendJ", MethodType.methodType(BMH, MethodType.class, LambdaForm.class, long.class)),
+                        BMH_LOOKUP.resolveOrFail(REF_invokeVirtual, BMH, "copyWithExtendF", MethodType.methodType(BMH, MethodType.class, LambdaForm.class, float.class)),
+                        BMH_LOOKUP.resolveOrFail(REF_invokeVirtual, BMH, "copyWithExtendD", MethodType.methodType(BMH, MethodType.class, LambdaForm.class, double.class)),
+                        BMH_LOOKUP.resolveOrFail(REF_invokeVirtual, BMH, "copyWith", MethodType.methodType(BMH, MethodType.class, LambdaForm.class))
                 );
             } catch (ReflectiveOperationException ex) {
                 throw newInternalError("Failed resolving copyWith methods", ex);

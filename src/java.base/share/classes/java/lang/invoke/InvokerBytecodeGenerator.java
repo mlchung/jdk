@@ -106,15 +106,7 @@ class InvokerBytecodeGenerator {
 
     private static final MemberName.Factory MEMBERNAME_FACTORY = MemberName.getFactory();
     private static final Class<?> HOST_CLASS = LambdaForm.class;
-    private static final MethodHandles.Lookup LOOKUP = lookup();
-
-    private static MethodHandles.Lookup lookup() {
-        try {
-            return MethodHandles.privateLookupIn(HOST_CLASS, IMPL_LOOKUP);
-        } catch (IllegalAccessException e) {
-            throw newInternalError(e);
-        }
-    }
+    private static final MethodHandles.Lookup LOOKUP = MethodHandles.trustedLookupIn(HOST_CLASS);
 
     /** Main constructor; other constructors delegate to this one. */
     private InvokerBytecodeGenerator(LambdaForm lambdaForm, int localsMapSize,

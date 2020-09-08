@@ -24,6 +24,7 @@
 package java.lang.invoke;
 
 import java.lang.invoke.MethodHandles.Lookup;
+import java.lang.reflect.Field;
 import jdk.internal.vm.annotation.DontInline;
 import jdk.internal.vm.annotation.ForceInline;
 
@@ -35,7 +36,18 @@ public class MethodHandleHelper {
 
     private MethodHandleHelper() { }
 
-    public static final Lookup IMPL_LOOKUP = Lookup.IMPL_LOOKUP;
+    public static final Lookup IMPL_LOOKUP = getImplLookup();
+
+    private static Lookup getImplLookup() {
+        try {
+            Field field = MethodHandles.Lookup.class.getDeclaredField("IMPL_LOOKUP");
+            field.setAccessible(true);
+            return (Lookup) field.get(null);
+        } catch (ReflectiveOperationException ex) {
+            throw new Error(ex);
+        }
+    }
+
     public static final Class<?> MHN_CALL_SITE_CONTEXT_CLASS
             = MethodHandleNatives.CallSiteContext.class;
 

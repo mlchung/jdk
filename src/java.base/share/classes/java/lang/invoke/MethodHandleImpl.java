@@ -53,7 +53,6 @@ import java.util.stream.Stream;
 
 import static java.lang.invoke.LambdaForm.*;
 import static java.lang.invoke.MethodHandleStatics.*;
-import static java.lang.invoke.MethodHandles.Lookup.IMPL_LOOKUP;
 import static jdk.internal.org.objectweb.asm.Opcodes.*;
 
 /**
@@ -230,7 +229,7 @@ abstract class MethodHandleImpl {
             String     name = name(arrayClass, access);
             MethodType type = type(arrayClass, access);
             try {
-                return IMPL_LOOKUP.findStatic(ArrayAccessor.class, name, type);
+                return MH_IMPL_LOOKUP.findStatic(ArrayAccessor.class, name, type);
             } catch (ReflectiveOperationException ex) {
                 throw uncaughtException(ex);
             }
@@ -1131,6 +1130,10 @@ abstract class MethodHandleImpl {
      * are in this category, including Class.forName and Method.invoke.
      */
     static MethodHandle bindCaller(MethodHandle mh, Class<?> hostClass) {
+        // skip binding caller for BindCaller::checkCallerClass
+        if (hostClass == MethodHandleImpl.BindCaller.class) {
+            return mh;
+        }
         return BindCaller.bindCaller(mh, hostClass);
     }
 
@@ -1148,7 +1151,7 @@ abstract class MethodHandleImpl {
                 ||    (hostClass.isArray() ||
                        hostClass.isPrimitive() ||
                        hostClass.getName().startsWith("java.lang.invoke."))) {
-                throw new InternalError();  // does not happen, and should not anyway
+                throw new InternalError(hostClass.getName());  // does not happen, and should not anyway
             }
             // For simplicity, convert mh to a varargs-like method.
             MethodHandle vamh = prepareForInvoker(mh);
@@ -1171,11 +1174,12 @@ abstract class MethodHandleImpl {
                     // use the original class name
                     name = name.replace('/', '_');
                 }
-                Class<?> invokerClass = new Lookup(targetClass)
+                MethodHandles.Lookup invokerClassLookup = MethodHandles.trustedLookupIn(targetClass)
                         .makeHiddenClassDefiner(name, INJECTED_INVOKER_TEMPLATE)
-                        .defineClass(true);
-                assert checkInjectedInvoker(targetClass, invokerClass);
-                return IMPL_LOOKUP.findStatic(invokerClass, "invoke_V", INVOKER_MT);
+                        .defineClassAsLookup(true);
+                Class<?> invokerClass = invokerClassLookup.lookupClass();
+                assert checkInjectedInvoker(targetClass, invokerClassLookup);
+                return invokerClassLookup.findStatic(invokerClass, "invoke_V", INVOKER_MT);
             } catch (ReflectiveOperationException ex) {
                 throw uncaughtException(ex);
             }
@@ -1211,7 +1215,8 @@ abstract class MethodHandleImpl {
             return mh;
         }
 
-        private static boolean checkInjectedInvoker(Class<?> hostClass, Class<?> invokerClass) {
+        private static boolean checkInjectedInvoker(Class<?> hostClass, Lookup invokerClassLookup) {
+            Class<?> invokerClass = invokerClassLookup.lookupClass();
             assert (hostClass.getClassLoader() == invokerClass.getClassLoader()) : hostClass.getName()+" (CL)";
             try {
                 assert (hostClass.getProtectionDomain() == invokerClass.getProtectionDomain()) : hostClass.getName()+" (PD)";
@@ -1220,7 +1225,7 @@ abstract class MethodHandleImpl {
             }
             try {
                 // Test the invoker to ensure that it really injects into the right place.
-                MethodHandle invoker = IMPL_LOOKUP.findStatic(invokerClass, "invoke_V", INVOKER_MT);
+                MethodHandle invoker = invokerClassLookup.findStatic(invokerClass, "invoke_V", INVOKER_MT);
                 MethodHandle vamh = prepareForInvoker(MH_checkCallerClass);
                 return (boolean)invoker.invoke(vamh, new Object[]{ invokerClass });
             } catch (Throwable ex) {
@@ -1233,7 +1238,7 @@ abstract class MethodHandleImpl {
             final Class<?> THIS_CLASS = BindCaller.class;
             assert(checkCallerClass(THIS_CLASS));
             try {
-                MH_checkCallerClass = IMPL_LOOKUP
+                MH_checkCallerClass = MethodHandles.lookup()
                     .findStatic(THIS_CLASS, "checkCallerClass",
                                 MethodType.methodType(boolean.class, Class.class));
                 assert((boolean) MH_checkCallerClass.invokeExact(THIS_CLASS));
@@ -1410,7 +1415,7 @@ abstract class MethodHandleImpl {
                 .changeReturnType(rtype)
                 .insertParameterTypes(0, ptypes);
         try {
-            return IMPL_LOOKUP.findStatic(MethodHandleImpl.class, name, type);
+            return MH_IMPL_LOOKUP.findStatic(MethodHandleImpl.class, name, type);
         } catch (ReflectiveOperationException ex) {
             return null;
         }
@@ -2280,6 +2285,8 @@ abstract class MethodHandleImpl {
         return method;
     }
 
+    private static final MethodHandles.Lookup MH_IMPL_LOOKUP = MethodHandles.lookup();
+
     // Local constant method handles:
     private static final @Stable MethodHandle[] HANDLES = new MethodHandle[MH_LIMIT];
 
@@ -2287,40 +2294,40 @@ abstract class MethodHandleImpl {
         try {
             switch (idx) {
                 case MH_cast:
-                    return IMPL_LOOKUP.findVirtual(Class.class, "cast",
+                    return MH_IMPL_LOOKUP.findVirtual(Class.class, "cast",
                             MethodType.methodType(Object.class, Object.class));
                 case MH_copyAsPrimitiveArray:
-                    return IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "copyAsPrimitiveArray",
+                    return MH_IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "copyAsPrimitiveArray",
                             MethodType.methodType(Object.class, Wrapper.class, Object[].class));
                 case MH_arrayIdentity:
-                    return IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "identity",
+                    return MH_IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "identity",
                             MethodType.methodType(Object[].class, Object[].class));
                 case MH_fillNewArray:
-                    return IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "fillNewArray",
+                    return MH_IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "fillNewArray",
                             MethodType.methodType(Object[].class, Integer.class, Object[].class));
                 case MH_fillNewTypedArray:
-                    return IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "fillNewTypedArray",
+                    return MH_IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "fillNewTypedArray",
                             MethodType.methodType(Object[].class, Object[].class, Integer.class, Object[].class));
                 case MH_selectAlternative:
-                    return IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "selectAlternative",
+                    return MH_IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "selectAlternative",
                             MethodType.methodType(MethodHandle.class, boolean.class, MethodHandle.class, MethodHandle.class));
                 case MH_countedLoopPred:
-                    return IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "countedLoopPredicate",
+                    return MH_IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "countedLoopPredicate",
                             MethodType.methodType(boolean.class, int.class, int.class));
                 case MH_countedLoopStep:
-                    return IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "countedLoopStep",
+                    return MH_IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "countedLoopStep",
                             MethodType.methodType(int.class, int.class, int.class));
                 case MH_initIterator:
-                    return IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "initIterator",
+                    return MH_IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "initIterator",
                             MethodType.methodType(Iterator.class, Iterable.class));
                 case MH_iteratePred:
-                    return IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "iteratePredicate",
+                    return MH_IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "iteratePredicate",
                             MethodType.methodType(boolean.class, Iterator.class));
                 case MH_iterateNext:
-                    return IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "iterateNext",
+                    return MH_IMPL_LOOKUP.findStatic(MethodHandleImpl.class, "iterateNext",
                             MethodType.methodType(Object.class, Iterator.class));
                 case MH_Array_newInstance:
-                    return IMPL_LOOKUP.findStatic(Array.class, "newInstance",
+                    return MH_IMPL_LOOKUP.findStatic(Array.class, "newInstance",
                             MethodType.methodType(Object.class, Class.class, int.class));
             }
         } catch (ReflectiveOperationException ex) {

@@ -26,7 +26,6 @@
 package java.lang.invoke;
 
 import static java.lang.invoke.MethodHandleStatics.*;
-import static java.lang.invoke.MethodHandles.Lookup.IMPL_LOOKUP;
 
 import jdk.internal.vm.annotation.Stable;
 
@@ -226,6 +225,7 @@ public class CallSite {
         return MethodHandles.foldArguments(invoker, getTarget);
     }
 
+    private static final MethodHandles.Lookup CS_LOOKUP = MethodHandles.lookup();
     private static @Stable MethodHandle GET_TARGET;
     private static MethodHandle getTargetHandle() {
         MethodHandle handle = GET_TARGET;
@@ -233,7 +233,7 @@ public class CallSite {
             return handle;
         }
         try {
-            return GET_TARGET = IMPL_LOOKUP.
+            return GET_TARGET = CS_LOOKUP.
                     findVirtual(CallSite.class, "getTarget",
                                 MethodType.methodType(MethodHandle.class));
         } catch (ReflectiveOperationException e) {
@@ -248,7 +248,7 @@ public class CallSite {
             return handle;
         }
         try {
-            return THROW_UCS = IMPL_LOOKUP.
+            return THROW_UCS = CS_LOOKUP.
                 findStatic(CallSite.class, "uninitializedCallSite",
                            MethodType.methodType(Object.class, Object[].class));
         } catch (ReflectiveOperationException e) {
