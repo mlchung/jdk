@@ -24,6 +24,7 @@
 package jdk.test;
 
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationHandlerWithLookup;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -35,8 +36,8 @@ import java.lang.reflect.UndeclaredThrowableException;
  */
 public class DefaultMethods {
     private final static Module TEST_MODULE = DefaultMethods.class.getModule();
-    private final static InvocationHandler IH = (proxy, method, params) -> {
-        return InvocationHandler.invokeDefaultMethod(proxy, method, params);
+    private final static InvocationHandlerWithLookup IH = (lookup, proxy, method, params) -> {
+        return InvocationHandlerWithLookup.invokeDefaultMethod(lookup, proxy, method, params);
     };
 
     public static void main(String... args) throws Exception {
@@ -70,28 +71,9 @@ public class DefaultMethods {
     }
 
     static void inaccessibleDefaultMethod(Class<?> intf) throws Exception {
-        Object proxy = Proxy.newProxyInstance(TEST_MODULE.getClassLoader(), new Class<?>[] { intf }, IH);
-        if (!proxy.getClass().getModule().isNamed()) {
-            throw new RuntimeException(proxy.getClass() + " expected to be in a named module");
-        }
-        Method m = intf.getMethod("m");
         try {
-            InvocationHandler.invokeDefaultMethod(proxy, m, null);
-            throw new RuntimeException("IAE not thrown invoking: " + m);
+            Proxy.newProxyInstance(TEST_MODULE.getClassLoader(), new Class<?>[]{intf}, IH);
+            throw new RuntimeException("IAE not thrown creating proxy implementing " + intf);
         } catch (IllegalAccessException e) {}
-
-        if (m.trySetAccessible()) {
-            try {
-                m.invoke(proxy);
-                throw new RuntimeException("IAE not thrown invoking: " + m);
-            } catch (InvocationTargetException e) {
-                // IAE wrapped by InvocationHandler::invoke with UndeclaredThrowableException
-                // then wrapped by Method::invoke with InvocationTargetException
-                assert e.getCause() instanceof UndeclaredThrowableException;
-                Throwable cause = e.getCause().getCause();
-                if (!(cause instanceof IllegalAccessException))
-                    throw e;
-            }
-        }
     }
 }

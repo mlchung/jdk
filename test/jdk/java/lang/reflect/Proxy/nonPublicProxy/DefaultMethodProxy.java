@@ -24,50 +24,46 @@
 import java.lang.reflect.*;
 import java.util.Arrays;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
-import static org.testng.Assert.*;
+import p.PProxyMaker;
 
 /*
  * @test
  * @bug 8159746
  * @summary Test invoking a default method in a non-public proxy interface
- * @build p.Foo p.Bar p.DefaultMethodInvoker
+ * @build p.Foo p.Bar p.PProxyMaker
  * @run testng DefaultMethodProxy
  */
 public class DefaultMethodProxy {
-    public interface I {
-        default String m() { return "I"; }
+
+    public interface Baz {
+        default String baz() { return "baz"; }
     }
 
-    @Test
-    public static void hasPackageAccess() throws Exception {
-        Class<?> fooClass = Class.forName("p.Foo");
-        Class<?> barClass = Class.forName("p.Bar");
-
-        // create a proxy instance of a non-public proxy interface
-        makeProxy(IH, fooClass).testDefaultMethod("foo");
-        makeProxy(IH, barClass, fooClass).testDefaultMethod("bar");
-
-        // create a proxy instance of a public proxy interface should succeed
-        makeProxy(IH, I.class).testDefaultMethod("I");
-    }
-
-    @DataProvider(name = "nonPublicIntfs")
-    private static Object[][] nonPublicIntfs() throws ClassNotFoundException {
+    @DataProvider(name = "inaccessibleIntfcs")
+    private static Object[][] inaccessibleIntfcs() throws ClassNotFoundException {
         Class<?> fooClass = Class.forName("p.Foo");
         Class<?> barClass = Class.forName("p.Bar");
         return new Object[][]{
                 new Object[]{new Class<?>[]{ fooClass }},
                 new Object[]{new Class<?>[]{ barClass }},
-                new Object[]{new Class<?>[]{ barClass, fooClass }},
+                // throwing an accessible interface to the mix does not change things
+                new Object[]{new Class<?>[]{ fooClass, Baz.class }},
+                new Object[]{new Class<?>[]{ barClass, Baz.class }},
         };
     }
 
-    @Test(dataProvider = "nonPublicIntfs")
-    public static void noPackageAccess(Class<?>[] intfs) throws Exception {
-        makeProxy(IH_NO_ACCESS, intfs).testDefaultMethod("dummy");
+    @Test(dataProvider = "inaccessibleIntfcs")
+    public static void hasPackageAccess(Class<?>[] intfs) throws ReflectiveOperationException {
+        new DefaultMethodProxy(PProxyMaker.makeProxy(IH, intfs)).testDefaultMethod("foo", "bar");
+    }
+
+    @Test(dataProvider = "inaccessibleIntfcs", expectedExceptions = IllegalAccessException.class)
+    public static void noPackageAccess(Class<?>[] intfs) throws IllegalAccessException {
+        makeProxy(IH, intfs);
     }
 
     final Object proxy;
@@ -78,47 +74,30 @@ public class DefaultMethodProxy {
     /*
      * Verify if a default method "m" can be invoked successfully
      */
-    void testDefaultMethod(String expected) throws ReflectiveOperationException {
+    void testDefaultMethod(String ... expected) throws ReflectiveOperationException {
         Method m = proxy.getClass().getDeclaredMethod("m");
         m.setAccessible(true);
         String name = (String)m.invoke(proxy);
-        if (!expected.equals(name)) {
-            throw new RuntimeException("return value: " + name + " expected: " + expected);
+        if (Stream.of(expected).noneMatch(name::equals)) {
+            throw new RuntimeException("return value: " + name + " expected one of: " + Arrays.toString(expected));
         }
     }
 
     // invocation handler with access to the non-public interface in package p
-    private static final InvocationHandler IH = (proxy, method, params) -> {
+    private static final InvocationHandlerWithLookup IH = (lookup, proxy, method, params) -> {
         System.out.format("Proxy for %s: invoking %s%n",
                 Arrays.stream(proxy.getClass().getInterfaces())
                       .map(Class::getName)
                       .collect(Collectors.joining(", ")), method.getName());
         if (method.isDefault()) {
-            return p.DefaultMethodInvoker.invoke(proxy, method, params);
+            return InvocationHandlerWithLookup.invokeDefaultMethod(lookup, proxy, method, params);
         }
         throw new UnsupportedOperationException(method.toString());
     };
 
-    // invocation handler with no access to the non-public interface in package p
+    // proxy maker with no access to the non-public interface in package p
     // expect IllegalAccessException thrown
-    private static final InvocationHandler IH_NO_ACCESS = (proxy, method, params) -> {
-        System.out.format("Proxy for %s: invoking %s%n",
-                Arrays.stream(proxy.getClass().getInterfaces())
-                        .map(Class::getName)
-                        .collect(Collectors.joining(", ")), method.getName());
-        if (method.isDefault()) {
-            try {
-                InvocationHandler.invokeDefaultMethod(proxy, method, params);
-                throw new RuntimeException("IAE not thrown in invoking: " + method);
-            } catch (IllegalAccessException e) {
-                return "dummy";
-            }
-        }
-        throw new UnsupportedOperationException(method.toString());
-    };
-
-    private static DefaultMethodProxy makeProxy(InvocationHandler ih, Class<?>... intfs) {
-        Object proxy = Proxy.newProxyInstance(DefaultMethodProxy.class.getClassLoader(), intfs, ih);
-        return new DefaultMethodProxy(proxy);
+    private static Object makeProxy(InvocationHandlerWithLookup ih, Class<?>... intfs) throws IllegalAccessException {
+        return Proxy.newProxyInstance(DefaultMethodProxy.class.getClassLoader(), intfs, ih);
     }
 }

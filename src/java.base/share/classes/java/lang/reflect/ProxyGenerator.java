@@ -29,8 +29,35 @@ import jdk.internal.org.objectweb.asm.ClassWriter;
 import jdk.internal.org.objectweb.asm.Label;
 import jdk.internal.org.objectweb.asm.MethodVisitor;
 import jdk.internal.org.objectweb.asm.Opcodes;
-import jdk.internal.org.objectweb.asm.Type;
 import sun.security.action.GetBooleanAction;
+
+import static jdk.internal.org.objectweb.asm.Opcodes.ACC_FINAL;
+import static jdk.internal.org.objectweb.asm.Opcodes.ACC_PUBLIC;
+import static jdk.internal.org.objectweb.asm.Opcodes.ACC_VARARGS;
+import static jdk.internal.org.objectweb.asm.Opcodes.ALOAD;
+import static jdk.internal.org.objectweb.asm.Opcodes.ARETURN;
+import static jdk.internal.org.objectweb.asm.Opcodes.ASTORE;
+import static jdk.internal.org.objectweb.asm.Opcodes.ATHROW;
+import static jdk.internal.org.objectweb.asm.Opcodes.CHECKCAST;
+import static jdk.internal.org.objectweb.asm.Opcodes.DLOAD;
+import static jdk.internal.org.objectweb.asm.Opcodes.DRETURN;
+import static jdk.internal.org.objectweb.asm.Opcodes.DUP;
+import static jdk.internal.org.objectweb.asm.Opcodes.FLOAD;
+import static jdk.internal.org.objectweb.asm.Opcodes.FRETURN;
+import static jdk.internal.org.objectweb.asm.Opcodes.GETFIELD;
+import static jdk.internal.org.objectweb.asm.Opcodes.GETSTATIC;
+import static jdk.internal.org.objectweb.asm.Opcodes.ILOAD;
+import static jdk.internal.org.objectweb.asm.Opcodes.INVOKEINTERFACE;
+import static jdk.internal.org.objectweb.asm.Opcodes.INVOKESPECIAL;
+import static jdk.internal.org.objectweb.asm.Opcodes.INVOKESTATIC;
+import static jdk.internal.org.objectweb.asm.Opcodes.INVOKEVIRTUAL;
+import static jdk.internal.org.objectweb.asm.Opcodes.IRETURN;
+import static jdk.internal.org.objectweb.asm.Opcodes.LLOAD;
+import static jdk.internal.org.objectweb.asm.Opcodes.LRETURN;
+import static jdk.internal.org.objectweb.asm.Opcodes.POP;
+import static jdk.internal.org.objectweb.asm.Opcodes.PUTSTATIC;
+import static jdk.internal.org.objectweb.asm.Opcodes.RETURN;
+import static jdk.internal.org.objectweb.asm.Opcodes.V14;
 
 import java.io.IOException;
 import java.lang.invoke.MethodType;
@@ -44,8 +71,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
-
-import static jdk.internal.org.objectweb.asm.Opcodes.*;
 
 /**
  * ProxyGenerator contains the code to generate a dynamic proxy class
@@ -65,22 +90,23 @@ final class ProxyGenerator extends ClassWriter {
     private static final String JL_NO_CLASS_DEF_FOUND_ERROR = "java/lang/NoClassDefFoundError";
     private static final String JL_NO_SUCH_METHOD_EX = "java/lang/NoSuchMethodException";
     private static final String JL_NO_SUCH_METHOD_ERROR = "java/lang/NoSuchMethodError";
-    private static final String JLI_LOOKUP = "java/lang/invoke/MethodHandles$Lookup";
     private static final String JLI_METHODHANDLES = "java/lang/invoke/MethodHandles";
 
-    private static final String JLR_INVOCATION_HANDLER = "java/lang/reflect/InvocationHandler";
+    private static final String JLR_INVOCATION_HANDLER_WITH_LOOKUP = "java/lang/reflect/InvocationHandlerWithLookup";
     private static final String JLR_PROXY = "java/lang/reflect/Proxy";
     private static final String JLR_UNDECLARED_THROWABLE_EX = "java/lang/reflect/UndeclaredThrowableException";
 
     private static final String LJL_CLASS = "Ljava/lang/Class;";
+    private static final String LJLI_LOOKUP = "Ljava/lang/invoke/MethodHandles$Lookup;";
     private static final String LJLR_METHOD = "Ljava/lang/reflect/Method;";
-    private static final String LJLR_INVOCATION_HANDLER = "Ljava/lang/reflect/InvocationHandler;";
+    private static final String LJLR_INVOCATION_HANDLER_WITH_LOOKUP = "Ljava/lang/reflect/InvocationHandlerWithLookup;";
 
-    private static final String MJLR_INVOCATIONHANDLER = "(Ljava/lang/reflect/InvocationHandler;)V";
+    private static final String MJLR_INVOCATION_HANDLER = "(Ljava/lang/reflect/InvocationHandler;)V";
+    private static final String MJLR_INVOCATION_HANDLER_WITH_LOOKUP_OBJECT = "(Ljava/lang/reflect/InvocationHandlerWithLookup;Ljava/lang/Object;)V";
 
     private static final String NAME_CTOR = "<init>";
     private static final String NAME_CLINIT = "<clinit>";
-    private static final String NAME_LOOKUP_ACCESSOR = "proxyClassLookup";
+    private static final String NAME_LOOKUP_FIELD = "l";
 
     private static final Class<?>[] EMPTY_CLASS_ARRAY = new Class<?>[0];
 
@@ -486,6 +512,11 @@ final class ProxyGenerator extends ClassWriter {
         }
 
         generateConstructor();
+        generateTrustedConstructor();
+
+        // add static field for the Lookup object
+        visitField(Modifier.PRIVATE | Modifier.STATIC, NAME_LOOKUP_FIELD,
+                   LJLI_LOOKUP, null, null);
 
         for (List<ProxyMethod> sigmethods : proxyMethods.values()) {
             for (ProxyMethod pm : sigmethods) {
@@ -499,7 +530,6 @@ final class ProxyGenerator extends ClassWriter {
         }
 
         generateStaticInitializer();
-        generateLookupAccessor();
         return toByteArray();
     }
 
@@ -558,17 +588,41 @@ final class ProxyGenerator extends ClassWriter {
     }
 
     /**
-     * Generate the constructor method for the proxy class.
+     * Generate the constructor method for the proxy class that is meant to be called
+     * by user via reflection.
      */
     private void generateConstructor() {
         MethodVisitor ctor = visitMethod(Modifier.PUBLIC, NAME_CTOR,
-                MJLR_INVOCATIONHANDLER, null, null);
+                                         MJLR_INVOCATION_HANDLER, null, null);
         ctor.visitParameter(null, 0);
         ctor.visitCode();
         ctor.visitVarInsn(ALOAD, 0);
         ctor.visitVarInsn(ALOAD, 1);
         ctor.visitMethodInsn(INVOKESPECIAL, JLR_PROXY, NAME_CTOR,
-                MJLR_INVOCATIONHANDLER, false);
+                             MJLR_INVOCATION_HANDLER, false);
+        ctor.visitInsn(RETURN);
+
+        // Maxs computed by ClassWriter.COMPUTE_FRAMES, these arguments ignored
+        ctor.visitMaxs(-1, -1);
+        ctor.visitEnd();
+    }
+
+    /**
+     * Generate the constructor method for the proxy class that is meant to be called
+     * from {@linkplain Proxy#newProxyInstance(ClassLoader, Class[], InvocationHandler)} or
+     * {@linkplain Proxy#newProxyInstance(ClassLoader, Class[], InvocationHandlerWithLookup)}.
+     */
+    private void generateTrustedConstructor() {
+        MethodVisitor ctor = visitMethod(Modifier.PUBLIC, NAME_CTOR,
+                                         MJLR_INVOCATION_HANDLER_WITH_LOOKUP_OBJECT, null, null);
+        ctor.visitParameter(null, 0);
+        ctor.visitParameter(null, 0);
+        ctor.visitCode();
+        ctor.visitVarInsn(ALOAD, 0);
+        ctor.visitVarInsn(ALOAD, 1);
+        ctor.visitVarInsn(ALOAD, 2);
+        ctor.visitMethodInsn(INVOKESPECIAL, JLR_PROXY, NAME_CTOR,
+                             MJLR_INVOCATION_HANDLER_WITH_LOOKUP_OBJECT, false);
         ctor.visitInsn(RETURN);
 
         // Maxs computed by ClassWriter.COMPUTE_FRAMES, these arguments ignored
@@ -595,6 +649,13 @@ final class ProxyGenerator extends ClassWriter {
                 JL_CLASS_NOT_FOUND_EX);
 
         mv.visitLabel(L_startBlock);
+        // initialize Lookup field
+        mv.visitMethodInsn(INVOKESTATIC, JLI_METHODHANDLES, "lookup",
+                           "()" + LJLI_LOOKUP, false);
+        mv.visitFieldInsn(PUTSTATIC,
+                          dotToSlash(className),
+                          NAME_LOOKUP_FIELD, LJLI_LOOKUP);
+        // initialize Method fields
         for (List<ProxyMethod> sigmethods : proxyMethods.values()) {
             for (ProxyMethod pm : sigmethods) {
                 pm.codeFieldInitialization(mv, className);
@@ -623,46 +684,6 @@ final class ProxyGenerator extends ClassWriter {
         mv.visitMethodInsn(INVOKEVIRTUAL, JL_THROWABLE,
                 "getMessage", "()Ljava/lang/String;", false);
         mv.visitMethodInsn(INVOKESPECIAL, JL_NO_CLASS_DEF_FOUND_ERROR,
-                "<init>", "(Ljava/lang/String;)V", false);
-        mv.visitInsn(ATHROW);
-
-        // Maxs computed by ClassWriter.COMPUTE_FRAMES, these arguments ignored
-        mv.visitMaxs(-1, -1);
-        mv.visitEnd();
-    }
-
-    /**
-     * Generate the static lookup accessor method that returns the Lookup
-     * on this proxy class if the caller's lookup class is java.lang.reflect.InvocationHandler;
-     * otherwise, IllegalAccessException is thrown
-     */
-    private void generateLookupAccessor() {
-        MethodVisitor mv = visitMethod(ACC_PRIVATE | ACC_STATIC, NAME_LOOKUP_ACCESSOR,
-                "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/invoke/MethodHandles$Lookup;", null,
-                new String[] { JL_ILLEGAL_ACCESS_EX });
-        mv.visitCode();
-        Label L_illegalAccess = new Label();
-
-        mv.visitVarInsn(ALOAD, 0);
-        mv.visitMethodInsn(INVOKEVIRTUAL, JLI_LOOKUP, "lookupClass",
-                "()Ljava/lang/Class;", false);
-        mv.visitLdcInsn(Type.getType(InvocationHandler.class));
-        mv.visitJumpInsn(IF_ACMPNE, L_illegalAccess);
-        mv.visitVarInsn(ALOAD, 0);
-        mv.visitMethodInsn(INVOKEVIRTUAL, JLI_LOOKUP, "hasFullPrivilegeAccess",
-                "()Z", false);
-        mv.visitJumpInsn(IFEQ, L_illegalAccess);
-        mv.visitMethodInsn(INVOKESTATIC, JLI_METHODHANDLES, "lookup",
-                "()Ljava/lang/invoke/MethodHandles$Lookup;", false);
-        mv.visitInsn(ARETURN);
-
-        mv.visitLabel(L_illegalAccess);
-        mv.visitTypeInsn(Opcodes.NEW, JL_ILLEGAL_ACCESS_EX);
-        mv.visitInsn(DUP);
-        mv.visitVarInsn(ALOAD, 0);
-        mv.visitMethodInsn(INVOKEVIRTUAL, JLI_LOOKUP, "toString",
-                "()Ljava/lang/String;", false);
-        mv.visitMethodInsn(INVOKESPECIAL, JL_ILLEGAL_ACCESS_EX,
                 "<init>", "(Ljava/lang/String;)V", false);
         mv.visitInsn(ATHROW);
 
@@ -748,10 +769,16 @@ final class ProxyGenerator extends ClassWriter {
             }
             mv.visitLabel(L_startBlock);
 
+            // InvocationHandlerWithLookup h
             mv.visitVarInsn(ALOAD, 0);
             mv.visitFieldInsn(GETFIELD, JLR_PROXY, handlerFieldName,
-                    LJLR_INVOCATION_HANDLER);
+                    LJLR_INVOCATION_HANDLER_WITH_LOOKUP);
+            // Lookup l
+            mv.visitFieldInsn(GETSTATIC, dotToSlash(className), NAME_LOOKUP_FIELD,
+                              LJLI_LOOKUP);
+            // this (proxy)
             mv.visitVarInsn(ALOAD, 0);
+            // Method mNN
             mv.visitFieldInsn(GETSTATIC, dotToSlash(className), methodFieldName,
                     LJLR_METHOD);
 
@@ -769,10 +796,16 @@ final class ProxyGenerator extends ClassWriter {
                 mv.visitInsn(Opcodes.ACONST_NULL);
             }
 
-            mv.visitMethodInsn(INVOKEINTERFACE, JLR_INVOCATION_HANDLER,
-                    "invoke",
-                    "(Ljava/lang/Object;Ljava/lang/reflect/Method;" +
-                            "[Ljava/lang/Object;)Ljava/lang/Object;", true);
+            mv.visitMethodInsn(
+                INVOKEINTERFACE, JLR_INVOCATION_HANDLER_WITH_LOOKUP,
+                "invoke",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;" +
+                    "Ljava/lang/Object;" +
+                    "Ljava/lang/reflect/Method;" +
+                    "[Ljava/lang/Object;)" +
+                    "Ljava/lang/Object;",
+                true
+            );
 
             if (returnType == void.class) {
                 mv.visitInsn(POP);
