@@ -1,14 +1,8 @@
 package java.lang.reflect;
 
-import static java.lang.invoke.MethodType.methodType;
-
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
-import java.lang.invoke.WrongMethodTypeException;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.BooleanSupplier;
 
 /**
  * {@code InvocationHandler.WithLookup} is a functional super-interface of plain
@@ -248,51 +242,9 @@ public interface InvocationHandlerWithLookup {
         if (proxyClass != proxyLookup.lookupClass() || !proxyLookup.hasFullPrivilegeAccess()) {
             throw new IllegalAccessException("'proxyLookup' is not a full privilege proxy class lookup");
         }
-        // lookup the cached method handle
-        ConcurrentHashMap<Method, MethodHandle> methods = Proxy.defaultMethodsCache(proxyClass);
-        MethodHandle superMH = methods.get(method);
 
-        if (superMH == null) {
-            MethodType type = methodType(method.getReturnType(), method.getParameterTypes());
-            Class<?> proxyInterface = Proxy.findProxyInterfaceOrElseThrow(proxyClass, method);
-            MethodHandle dmh;
-            try {
-                dmh = proxyLookup
-                    .findSpecial(proxyInterface, method.getName(), type, proxyClass)
-                    .withVarargs(false);
-            } catch (NoSuchMethodException e) {
-                // should not reach here
-                throw new InternalError(e);
-            }
-            // this check can be turned into assertion as it is guaranteed to succeed by the virtue of
-            // looking up a default (instance) method declared or inherited by proxyInterface
-            // while proxyClass implements (is a subtype of) proxyInterface ...
-            assert ((BooleanSupplier) () -> {
-                try {
-                    // make sure that the method type matches
-                    dmh.asType(type.insertParameterTypes(0, proxyClass));
-                    return true;
-                } catch (WrongMethodTypeException e) {
-                    return false;
-                }
-            }).getAsBoolean() : "Wrong method type";
-            // change return type to Object
-            MethodHandle mh = dmh.asType(dmh.type().changeReturnType(Object.class));
-            // wrap any exception thrown with InvocationTargetException
-            mh = MethodHandles.catchException(mh, Throwable.class, Proxy.wrapWithInvocationTargetExceptionMH());
-            // spread array of arguments among parameters (skipping 1st parameter - target)
-            mh = mh.asSpreader(1, Object[].class, type.parameterCount());
-            // change target type to Object
-            mh = mh.asType(MethodType.methodType(Object.class, Object.class, Object[].class));
-
-            // push MH into cache
-            MethodHandle cached = methods.putIfAbsent(method, mh);
-            if (cached != null) {
-                superMH = cached;
-            } else {
-                superMH = mh;
-            }
-        }
+        // lookup and cache transformed method handle
+        MethodHandle superMH = Proxy.getDefaultMethodMH(proxyLookup, method);
 
         // invoke the super method
         try {

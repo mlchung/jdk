@@ -111,7 +111,7 @@ public class DefaultMethods {
     }
 
     @Test
-    public void test() {
+    public void test() throws IllegalAccessException {
         ClassLoader loader = DefaultMethods.class.getClassLoader();
         Object proxy = Proxy.newProxyInstance(loader, new Class<?>[] { I1.class, I2.class},
                 (lookup, o, method, params) -> {
