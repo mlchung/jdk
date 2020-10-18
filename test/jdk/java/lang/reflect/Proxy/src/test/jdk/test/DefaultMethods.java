@@ -23,12 +23,9 @@
 
 package jdk.test;
 
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.InvocationHandlerWithLookup;
-import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.InvocationHandler2;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.lang.reflect.UndeclaredThrowableException;
 
 /**
  * Tests invocation of default methods in exported types and inaccessible types
@@ -36,9 +33,7 @@ import java.lang.reflect.UndeclaredThrowableException;
  */
 public class DefaultMethods {
     private final static Module TEST_MODULE = DefaultMethods.class.getModule();
-    private final static InvocationHandlerWithLookup IH = (lookup, proxy, method, params) -> {
-        return InvocationHandlerWithLookup.invokeDefaultMethod(lookup, proxy, method, params);
-    };
+    private final static InvocationHandler2 IH = InvocationHandler2.SuperInvoker::invokeSuper;
 
     public static void main(String... args) throws Exception {
         // exported types from m1

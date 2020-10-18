@@ -84,20 +84,20 @@ public class DefaultMethodProxy {
     }
 
     // invocation handler with access to the non-public interface in package p
-    private static final InvocationHandlerWithLookup IH = (lookup, proxy, method, params) -> {
+    private static final InvocationHandler2 IH = (superInvoker, proxy, method, params) -> {
         System.out.format("Proxy for %s: invoking %s%n",
                 Arrays.stream(proxy.getClass().getInterfaces())
                       .map(Class::getName)
                       .collect(Collectors.joining(", ")), method.getName());
         if (method.isDefault()) {
-            return InvocationHandlerWithLookup.invokeDefaultMethod(lookup, proxy, method, params);
+            return superInvoker.invokeSuper(proxy, method, params);
         }
         throw new UnsupportedOperationException(method.toString());
     };
 
     // proxy maker with no access to the non-public interface in package p
     // expect IllegalAccessException thrown
-    private static Object makeProxy(InvocationHandlerWithLookup ih, Class<?>... intfs) throws IllegalAccessException {
+    private static Object makeProxy(InvocationHandler2 ih, Class<?>... intfs) throws IllegalAccessException {
         return Proxy.newProxyInstance(DefaultMethodProxy.class.getClassLoader(), intfs, ih);
     }
 }

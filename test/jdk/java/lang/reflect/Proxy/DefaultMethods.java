@@ -22,9 +22,7 @@
  */
 
 import java.io.IOException;
-import java.lang.invoke.MethodHandles;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationHandlerWithLookup;
+import java.lang.reflect.InvocationHandler2;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -114,8 +112,8 @@ public class DefaultMethods {
     public void test() throws IllegalAccessException {
         ClassLoader loader = DefaultMethods.class.getClassLoader();
         Object proxy = Proxy.newProxyInstance(loader, new Class<?>[] { I1.class, I2.class},
-                (lookup, o, method, params) -> {
-                    return InvocationHandlerWithLookup.invokeDefaultMethod(lookup, o, findDefaultMethod(I2.class, method), params);
+                (superInvoker, o, method, params) -> {
+                    return superInvoker.invokeSuper(o, findDefaultMethod(I2.class, method), params);
                 });
         I1 i1 = (I1) proxy;
         assertEquals(i1.m(), 20);
@@ -138,7 +136,7 @@ public class DefaultMethods {
 
     @Test(dataProvider = "defaultMethods")
     public void testDefaultMethod(Class<?>[] intfs, boolean isDefault, int expected) throws Exception {
-        InvocationHandlerWithLookup ih = (lookup, proxy, method, params) -> {
+        InvocationHandler2 ih = (superInvoker, proxy, method, params) -> {
             System.out.format("invoking %s with parameters: %s%n", method, Arrays.toString(params));
             switch (method.getName()) {
                 case "m":
@@ -147,7 +145,7 @@ public class DefaultMethods {
                                      .anyMatch(intf -> method.getDeclaringClass() == intf),
                                Arrays.toString(proxy.getClass().getInterfaces()));
                     if (method.isDefault()) {
-                        return InvocationHandlerWithLookup.invokeDefaultMethod(lookup, proxy, method, params);
+                        return superInvoker.invokeSuper(proxy, method, params);
                     } else {
                         return -1;
                     }
@@ -193,18 +191,18 @@ public class DefaultMethods {
 
     @Test(dataProvider = "supers")
     public void testSuper(Class<?>[] intfs, Class<?> proxyInterface, int expected) throws Exception {
-        final InvocationHandlerWithLookup ih = (lookup, proxy, method, params) -> {
+        final InvocationHandler2 ih = (superInvoker, proxy, method, params) -> {
             switch (method.getName()) {
                 case "m":
                     assertTrue(method.isDefault());
-                    return InvocationHandlerWithLookup.invokeDefaultMethod(lookup, proxy, findDefaultMethod(proxyInterface, method), params);
+                    return superInvoker.invokeSuper(proxy, findDefaultMethod(proxyInterface, method), params);
                 default:
                     throw new UnsupportedOperationException(method.toString());
             }
         };
         ClassLoader loader = proxyInterface.getClassLoader();
         Object proxy = Proxy.newProxyInstance(loader, intfs, ih);
-        MethodHandles.Lookup lookup = getProxyLookup(proxy);
+        InvocationHandler2.SuperInvoker superInvoker = getSuperInvoker(proxy);
         if (proxyInterface == I1.class) {
             I1 i1 = (I1) proxy;
             assertEquals(i1.m(), expected);
@@ -220,32 +218,32 @@ public class DefaultMethods {
         } else {
             throw new UnsupportedOperationException(proxyInterface.toString());
         }
-        // invoke via InvocationHandler.invokeDefaultMethod directly
-        assertEquals(InvocationHandlerWithLookup.invokeDefaultMethod(lookup, proxy, proxyInterface.getMethod("m")), expected);
+        // invoke via superInvoker directly
+        assertEquals(superInvoker.invokeSuper(proxy, proxyInterface.getMethod("m")), expected);
     }
 
     // invoke I12 default methods with parameters and var args
     @Test
     public void testI12() throws Exception {
-        final InvocationHandlerWithLookup ih = (lookup, proxy, method, params) -> {
+        final InvocationHandler2 ih = (superInvoker, proxy, method, params) -> {
             System.out.format("invoking %s with parameters: %s%n", method, Arrays.toString(params));
             switch (method.getName()) {
                 case "sum":
                 case "concat":
                     assertTrue(method.isDefault());
-                    return InvocationHandlerWithLookup.invokeDefaultMethod(lookup, proxy, method, params);
+                    return superInvoker.invokeSuper(proxy, method, params);
                 default:
                     throw new UnsupportedOperationException(method.toString());
             }
         };
         ClassLoader loader = DefaultMethods.class.getClassLoader();
         I12 i12 = (I12) Proxy.newProxyInstance(loader, new Class<?>[] { I12.class }, ih);
-        MethodHandles.Lookup lookup = getProxyLookup(i12);
+        InvocationHandler2.SuperInvoker superInvoker = getSuperInvoker(i12);
         assertEquals(i12.sum(1, 2), 3);
         assertEquals(i12.concat(1, 2, 3, 4), new Object[]{1, 2, 3, 4});
         Method m = I12.class.getMethod("concat", Object.class, Object[].class);
         assertTrue(m.isDefault());
-        assertEquals(InvocationHandlerWithLookup.invokeDefaultMethod(lookup, i12, m, 100, new Object[] {"foo", true, "bar"}),
+        assertEquals(superInvoker.invokeSuper(i12, m, 100, new Object[] {"foo", true, "bar"}),
                      new Object[] {100, "foo", true, "bar"});
     }
 
@@ -254,28 +252,28 @@ public class DefaultMethods {
     public void testEmptyArgument() throws Exception {
         ClassLoader loader = DefaultMethods.class.getClassLoader();
         Object proxy = Proxy.newProxyInstance(loader, new Class<?>[]{I4.class}, HANDLER);
-        MethodHandles.Lookup lookup = getProxyLookup(proxy);
+        InvocationHandler2.SuperInvoker superInvoker = getSuperInvoker(proxy);
         Method m1 = I4.class.getMethod("m");
         assertTrue(m1.getDeclaringClass() == I4.class);
         assertTrue(m1.isDefault());
-        InvocationHandlerWithLookup.invokeDefaultMethod(lookup, proxy, m1);
-        InvocationHandlerWithLookup.invokeDefaultMethod(lookup, proxy, m1, new Object[0]);
+        superInvoker.invokeSuper(proxy, m1);
+        superInvoker.invokeSuper(proxy, m1, new Object[0]);
 
         Method m2 = I4.class.getMethod("mix", int.class, String.class);
         assertTrue(m1.getDeclaringClass() == I4.class);
         assertTrue(m1.isDefault());
-        InvocationHandlerWithLookup.invokeDefaultMethod(lookup, proxy, m2, Integer.valueOf(100), "foo");
+        superInvoker.invokeSuper(proxy, m2, Integer.valueOf(100), "foo");
     }
 
     @Test
     public void testVarArgs() throws Exception {
         ClassLoader loader = DefaultMethods.class.getClassLoader();
         I3 proxy = (I3)Proxy.newProxyInstance(loader, new Class<?>[]{I3.class}, HANDLER);
-        MethodHandles.Lookup lookup = getProxyLookup(proxy);
+        InvocationHandler2.SuperInvoker superInvoker = getSuperInvoker(proxy);
         Method m = I3.class.getMethod("m3", String[].class);
         assertTrue(m.isVarArgs() && m.isDefault());
         assertEquals(proxy.m3("a", "b", "cde"), 5);
-        assertEquals(InvocationHandlerWithLookup.invokeDefaultMethod(lookup, proxy, m, (Object)new String[] { "a", "bc" }), 3);
+        assertEquals(superInvoker.invokeSuper(proxy, m, (Object)new String[] {"a", "bc" }), 3);
     }
 
     /*
@@ -298,10 +296,10 @@ public class DefaultMethods {
     public void invokeNonProxyMethod() throws Exception {
         ClassLoader loader = DefaultMethods.class.getClassLoader();
         I3 proxy = (I3) Proxy.newProxyInstance(loader, new Class<?>[]{I3.class}, HANDLER);
-        MethodHandles.Lookup lookup = getProxyLookup(proxy);
+        InvocationHandler2.SuperInvoker superInvoker = getSuperInvoker(proxy);
         Method m = I4.class.getMethod("mix", int.class, String.class);
         assertTrue(m.isDefault());
-        InvocationHandlerWithLookup.invokeDefaultMethod(lookup, proxy, m);
+        superInvoker.invokeSuper(proxy, m);
     }
 
     // negative cases
@@ -328,10 +326,10 @@ public class DefaultMethods {
             throws Exception {
         ClassLoader loader = DefaultMethods.class.getClassLoader();
         Object proxy = Proxy.newProxyInstance(loader, interfaces, HANDLER);
-        MethodHandles.Lookup lookup = getProxyLookup(proxy);
+        InvocationHandler2.SuperInvoker superInvoker = getSuperInvoker(proxy);
         try {
             Method method = defc.getDeclaredMethod(name);
-            InvocationHandlerWithLookup.invokeDefaultMethod(lookup, proxy, method);
+            superInvoker.invokeSuper(proxy, method);
         } catch (Throwable e) {
             System.out.format("%s method %s::%s exception thrown: %s%n",
                               Arrays.toString(interfaces), defc.getName(), name, e.getMessage());
@@ -355,14 +353,14 @@ public class DefaultMethods {
     public void testIllegalArgument(Object... args) throws Exception {
         ClassLoader loader = DefaultMethods.class.getClassLoader();
         I4 proxy = (I4)Proxy.newProxyInstance(loader, new Class<?>[]{I4.class}, HANDLER);
-        MethodHandles.Lookup lookup = getProxyLookup(proxy);
+        InvocationHandler2.SuperInvoker superInvoker = getSuperInvoker(proxy);
         Method m = I4.class.getMethod("mix", int.class, String.class);
         assertTrue(m.isDefault());
         if (args.length == 0) {
             // substitute empty args with null since @DataProvider doesn't allow null array
             args = null;
         }
-        InvocationHandlerWithLookup.invokeDefaultMethod(lookup, proxy, m, args);
+        superInvoker.invokeSuper(proxy, m, args);
     }
 
     @DataProvider(name = "invocationTargetExceptions")
@@ -381,16 +379,16 @@ public class DefaultMethods {
     public void testInvocationTargetException(Throwable exception) throws Exception {
         ClassLoader loader = DefaultMethods.class.getClassLoader();
         IX proxy = (IX)Proxy.newProxyInstance(loader, new Class<?>[]{IX.class}, HANDLER);
-        MethodHandles.Lookup lookup = getProxyLookup(proxy);
+        InvocationHandler2.SuperInvoker superInvoker = getSuperInvoker(proxy);
         Method m = IX.class.getMethod("doThrow", Throwable.class);
         try {
-            InvocationHandlerWithLookup.invokeDefaultMethod(lookup, proxy, m, exception);
+            superInvoker.invokeSuper(proxy, m, exception);
         } catch (InvocationTargetException e) {
             assertEquals(e.getCause(), exception);
         }
     }
 
-    private static MethodHandles.Lookup getProxyLookup(Object proxy) {
+    private static InvocationHandler2.SuperInvoker getSuperInvoker(Object proxy) {
         try {
             Class<?> proxyClass = proxy.getClass();
             Class<?>[] intfcs = proxyClass.getInterfaces();
@@ -404,11 +402,11 @@ public class DefaultMethods {
             for (int i = 0; i < ptypes.length; i++) {
                 args[i] = getDefault(ptypes[i]);
             }
-            LookupCapturingHandler handler = new LookupCapturingHandler(returnValue);
+            InvokerCapturingHandler handler = new InvokerCapturingHandler(returnValue);
             // we assume caching works and we get the same proxy class
             Object captureProxy = Proxy.newProxyInstance(proxyClass.getClassLoader(), intfcs, handler);
             m.invoke(captureProxy, args);
-            return handler.getProxyLookup();
+            return handler.getSuperInvoker();
         } catch (Exception e) {
             throw new AssertionError("Can't get Proxy lookup", e);
         }
@@ -426,27 +424,27 @@ public class DefaultMethods {
         return null;
     }
 
-    private static class LookupCapturingHandler implements InvocationHandlerWithLookup {
-        private MethodHandles.Lookup proxyLookup;
+    private static class InvokerCapturingHandler implements InvocationHandler2 {
+        private SuperInvoker superInvoker;
         private final Object returnValue;
 
-        LookupCapturingHandler(Object returnValue) {
+        InvokerCapturingHandler(Object returnValue) {
             this.returnValue = returnValue;
         }
 
         @Override
-        public Object invoke(MethodHandles.Lookup proxyLookup, Object proxy, Method method, Object[] args) throws Throwable {
-            this.proxyLookup = proxyLookup;
+        public Object invoke(SuperInvoker superInvoker, Object proxy, Method method, Object[] args) throws Throwable {
+            this.superInvoker = superInvoker;
             return returnValue;
         }
 
-        MethodHandles.Lookup getProxyLookup() {
-            return proxyLookup;
+        SuperInvoker getSuperInvoker() {
+            return superInvoker;
         }
     }
 
-    private static final InvocationHandlerWithLookup HANDLER = (lookup, proxy, method, params) -> {
+    private static final InvocationHandler2 HANDLER = (superInvoker, proxy, method, params) -> {
         System.out.format("invoking %s with parameters: %s%n", method, Arrays.toString(params));
-        return InvocationHandlerWithLookup.invokeDefaultMethod(lookup, proxy, method, params);
+        return superInvoker.invokeSuper(proxy, method, params);
     };
 }

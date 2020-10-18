@@ -25,8 +25,6 @@
 
 package java.lang.reflect;
 
-import java.lang.invoke.MethodHandles;
-
 /**
  * {@code InvocationHandler} is the interface implemented by
  * the <i>invocation handler</i> of a proxy instance.
@@ -38,18 +36,18 @@ import java.lang.invoke.MethodHandles;
  *
  * @author      Peter Jones
  * @see         Proxy
- * @see         InvocationHandlerWithLookup
+ * @see         InvocationHandler2
  * @since       1.3
  */
 @FunctionalInterface
-public interface InvocationHandler extends InvocationHandlerWithLookup {
+public interface InvocationHandler extends InvocationHandler2 {
 
     /**
      * Processes a method invocation on a proxy instance and returns
      * the result.  This method will be invoked on an invocation handler
      * when a method is invoked on a proxy instance that it is
      * associated with unless
-     * {@linkplain #invoke(MethodHandles.Lookup, Object, Method, Object[])}
+     * {@linkplain #invoke(SuperInvoker, Object, Method, Object[])}
      * method is overridden.
      *
      * @param   proxy the proxy instance that the method was invoked on
@@ -95,7 +93,7 @@ public interface InvocationHandler extends InvocationHandlerWithLookup {
      * method invocation on the proxy instance.
      *
      * @see     UndeclaredThrowableException
-     * @see     InvocationHandlerWithLookup#invoke(MethodHandles.Lookup, Object, Method, Object[])
+     * @see     InvocationHandler#invoke(SuperInvoker, Object, Method, Object[])
      */
     public Object invoke(Object proxy, Method method, Object[] args)
         throws Throwable;
@@ -103,7 +101,7 @@ public interface InvocationHandler extends InvocationHandlerWithLookup {
     /**
      * Processes a method invocation on a proxy instance and returns the result.
      * This method just delegates to
-     * {@linkplain #invoke(Object, Method, Object[])}, ignoring the {@code proxyLookup}
+     * {@linkplain #invoke(Object, Method, Object[])}, ignoring the {@code superInvoker}
      * parameter.
      * You should not override this method if you want to create proxies for
      * interfaces that are not accessible to code creating proxy instances.
@@ -112,7 +110,7 @@ public interface InvocationHandler extends InvocationHandlerWithLookup {
      * @since 16
      */
     @Override
-    default Object invoke(MethodHandles.Lookup proxyLookup, Object proxy, Method method, Object[] args)
+    default Object invoke(SuperInvoker superInvoker, Object proxy, Method method, Object[] args)
         throws Throwable
     {
         return invoke(proxy, method, args);

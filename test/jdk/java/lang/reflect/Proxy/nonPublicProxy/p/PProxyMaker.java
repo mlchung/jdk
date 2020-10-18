@@ -26,7 +26,7 @@ import java.lang.reflect.*;
 
 public class PProxyMaker {
     // proxy maker with access to the non-public interfaces in package p
-    public static Object makeProxy(InvocationHandlerWithLookup ih, Class<?>... intfs) throws IllegalAccessException {
+    public static Object makeProxy(InvocationHandler2 ih, Class<?>... intfs) throws IllegalAccessException {
        return Proxy.newProxyInstance(PProxyMaker.class.getClassLoader(), intfs, ih);
     }
 }
