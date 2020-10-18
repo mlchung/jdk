@@ -29,6 +29,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodHandles.Lookup;
 import java.lang.invoke.MethodType;
+import java.lang.invoke.WrongMethodTypeException;
 import java.lang.module.ModuleDescriptor;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
@@ -46,6 +47,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 
 import jdk.internal.access.JavaLangAccess;
 import jdk.internal.access.SharedSecrets;
@@ -54,11 +56,11 @@ import jdk.internal.misc.VM;
 import jdk.internal.reflect.CallerSensitive;
 import jdk.internal.reflect.Reflection;
 import jdk.internal.loader.ClassLoaderValue;
-import jdk.internal.vm.annotation.Stable;
 import sun.reflect.misc.ReflectUtil;
 import sun.security.action.GetPropertyAction;
 import sun.security.util.SecurityConstants;
 
+import static java.lang.invoke.MethodType.methodType;
 import static java.lang.module.ModuleDescriptor.Modifier.SYNTHETIC;
 
 /**
@@ -151,9 +153,11 @@ import static java.lang.module.ModuleDescriptor.Modifier.SYNTHETIC;
  *
  * <li>A proxy interface may define a default method or inherit
  * a default method from its superinterface directly or indirectly.
- * An invocation handler can invoke a default method of a proxy interface
- * by calling {@link InvocationHandler#invokeDefaultMethod(Object, Method, Object...)
- * InvocationHandler::invokeDefaultMethod}.
+ * An invocation handler implementing:
+ * {@linkplain InvocationHandler2#invoke(InvocationHandler2.SuperInvoker, Object, Method, Object[])}
+ * can invoke a default method of a proxy interface by calling
+ * {@link InvocationHandler2.SuperInvoker#invokeSuper(Object, Method, Object...)}
+ * on the passed-in {@code SuperInvoker}.
  *
  * <li>An invocation of the {@code hashCode},
  * {@code equals}, or {@code toString} methods declared in
@@ -174,8 +178,9 @@ import static java.lang.module.ModuleDescriptor.Modifier.SYNTHETIC;
  * the accessibility of the proxy class is in line with the accessibility of
  * the proxy interfaces. Specifically, the package and the module membership
  * of a proxy class defined via the
- * {@link Proxy#getProxyClass(ClassLoader, Class[])} or
- * {@link Proxy#newProxyInstance(ClassLoader, Class[], InvocationHandler)}
+ * {@link Proxy#getProxyClass(ClassLoader, Class[])},
+ * {@link Proxy#newProxyInstance(ClassLoader, Class[], InvocationHandler)} or
+ * {@link Proxy#newProxyInstance(ClassLoader, Class[], InvocationHandler2)}
  * methods is specified as follows:
  *
  * <ol>
@@ -298,7 +303,7 @@ public class Proxy implements java.io.Serializable {
 
     /** parameter types of a proxy class constructor */
     private static final Class<?>[] constructorParams =
-        { InvocationHandler.class };
+        {InvocationHandler2.class, Object.class };
 
     /**
      * a cache of proxy constructors with
@@ -312,13 +317,7 @@ public class Proxy implements java.io.Serializable {
      * @serial
      */
     @SuppressWarnings("serial") // Not statically typed as Serializable
-    protected InvocationHandler h;
-
-    /**
-     * Prohibits instantiation.
-     */
-    private Proxy() {
-    }
+    protected InvocationHandler2 h;
 
     /**
      * Constructs a new {@code Proxy} instance from a subclass
@@ -329,10 +328,41 @@ public class Proxy implements java.io.Serializable {
      *
      * @throws NullPointerException if the given invocation handler, {@code h},
      *         is {@code null}.
+     * @throws IllegalArgumentException if the given invocation handler, {@code h},
+     *         overrides method
+     *         {@linkplain InvocationHandler2#invoke(InvocationHandler2.SuperInvoker, Object, Method, Object[])}
      */
     protected Proxy(InvocationHandler h) {
-        Objects.requireNonNull(h);
+        if (!PLAIN_HANDLER_CACHE.get(h.getClass())) {
+            throw new IllegalArgumentException("Can only use plain InvocationHandler");
+        }
         this.h = h;
+    }
+
+    /**
+     * Constructs a new {@code Proxy} instance from a subclass
+     * (typically, a dynamic proxy class) with the specified value
+     * for its invocation handler and a special instance of {@code trustHandle}
+     * object that can only be provided by trusted code.
+     *
+     * @param  h the invocation handler for this proxy instance
+     *
+     * @param trustHandle special instance of Object that can only be provided
+     *                   by trusted code
+     *
+     * @throws NullPointerException if the given invocation handler, {@code h},
+     *         is {@code null}.
+     *
+     * @throws IllegalArgumentException if given {@code trustHandle} is not a
+     *         special Object instance that can only be provided by trusted code.
+     *
+     * @since 16
+     */
+    protected Proxy(InvocationHandler2 h, Object trustHandle) {
+        if (trustHandle != TRUST_HANDLE) {
+            throw new IllegalArgumentException("Wrong 'trustHandle'");
+        }
+        this.h = Objects.requireNonNull(h);
     }
 
     /**
@@ -389,11 +419,7 @@ public class Proxy implements java.io.Serializable {
                                          Class<?>... interfaces)
         throws IllegalArgumentException
     {
-        Class<?> caller = System.getSecurityManager() == null
-                              ? null
-                              : Reflection.getCallerClass();
-
-        return getProxyConstructor(caller, loader, interfaces)
+        return getProxyConstructor(Reflection.getCallerClass(), loader, interfaces)
             .getDeclaringClass();
     }
 
@@ -403,9 +429,7 @@ public class Proxy implements java.io.Serializable {
      * and an array of interfaces. The returned constructor will have the
      * {@link Constructor#setAccessible(boolean) accessible} flag already set.
      *
-     * @param   caller passed from a public-facing @CallerSensitive method if
-     *                 SecurityManager is set or {@code null} if there's no
-     *                 SecurityManager
+     * @param   caller passed from a public-facing @CallerSensitive method
      * @param   loader the class loader to define the proxy class
      * @param   interfaces the list of interfaces for the proxy class
      *          to implement
@@ -419,9 +443,7 @@ public class Proxy implements java.io.Serializable {
         // optimization for single interface
         if (interfaces.length == 1) {
             Class<?> intf = interfaces[0];
-            if (caller != null) {
-                checkProxyAccess(caller, loader, intf);
-            }
+            checkProxyAccess(caller, loader, intf);
             return proxyCache.sub(intf).computeIfAbsent(
                 loader,
                 (ld, clv) -> new ProxyBuilder(ld, clv.key()).build()
@@ -429,9 +451,7 @@ public class Proxy implements java.io.Serializable {
         } else {
             // interfaces cloned
             final Class<?>[] intfsArray = interfaces.clone();
-            if (caller != null) {
-                checkProxyAccess(caller, loader, intfsArray);
-            }
+            checkProxyAccess(caller, loader, intfsArray);
             final List<Class<?>> intfs = Arrays.asList(intfsArray);
             return proxyCache.sub(intfs).computeIfAbsent(
                 loader,
@@ -918,6 +938,209 @@ public class Proxy implements java.io.Serializable {
     }
 
     /**
+     * Implementation of {@linkplain java.lang.reflect.InvocationHandler2.SuperInvoker}
+     * interface dispatching to super default methods of proxy interfaces.
+     */
+    private static final class SuperInvokerImpl implements InvocationHandler2.SuperInvoker {
+        private static final Object[] EMPTY_ARGS = new Object[0];
+        private final ConcurrentHashMap<Method, MethodHandle> methods = new ConcurrentHashMap<>();
+        private final Lookup proxyLookup;
+
+        private SuperInvokerImpl(Lookup proxyLookup) {
+            this.proxyLookup = proxyLookup;
+        }
+
+        @Override
+        public Object invokeSuper(Object proxy, Method method, Object... args) throws InvocationTargetException {
+            // verify that the object is actually an instance of the correct proxy class
+            if (proxy.getClass() != proxyLookup.lookupClass()) {
+                throw new IllegalArgumentException("'proxy' is not an instance of " + proxyLookup.lookupClass());
+            }
+            // ...that the method is a default method...
+            if (!method.isDefault()) {
+                throw new IllegalArgumentException("\"" + method + "\" is not a default method");
+            }
+
+            MethodHandle superMH = getSuperMH(method);
+
+            // the args array can be null if the number of formal parameters required by
+            // the method is zero (consistent with Method::invoke)
+            Object[] params = args != null ? args : EMPTY_ARGS;
+
+            // invoke the super method
+            try {
+                return superMH.invokeExact(proxy, params);
+            } catch (ClassCastException | NullPointerException e) {
+                throw new IllegalArgumentException(e.getMessage(), e);
+            } catch (InvocationTargetException | RuntimeException | Error e) {
+                throw e;
+            } catch (Throwable e) {
+                // should not reach here
+                throw new InternalError(e);
+            }
+        }
+
+        /**
+         * Looks up special method handle, transforms and caches it.
+         *
+         * @param method the super method to lookup
+         * @return transformed special method handle of super method.
+         */
+        private MethodHandle getSuperMH(Method method) {
+            MethodHandle superMH = methods.get(method);
+            if (superMH == null) {
+                Class<?> proxyClass = proxyLookup.lookupClass();
+                MethodType type = methodType(method.getReturnType(), method.getParameterTypes());
+                Class<?> proxyInterface = findProxyInterfaceOrElseThrow(proxyClass, method);
+                MethodHandle dmh;
+                try {
+                    dmh = proxyLookup
+                        .findSpecial(proxyInterface, method.getName(), type, proxyClass)
+                        .withVarargs(false);
+                } catch (IllegalAccessException | NoSuchMethodException e) {
+                    // should not reach here
+                    throw new InternalError(e);
+                }
+                // this check can be turned into assertion as it is guaranteed to succeed by the virtue of
+                // looking up a default (instance) method declared or inherited by proxyInterface
+                // while proxyClass implements (is a subtype of) proxyInterface ...
+                assert ((BooleanSupplier) () -> {
+                    try {
+                        // make sure that the method type matches
+                        dmh.asType(type.insertParameterTypes(0, proxyClass));
+                        return true;
+                    } catch (WrongMethodTypeException e) {
+                        return false;
+                    }
+                }).getAsBoolean() : "Wrong method type";
+                // change return type to Object
+                MethodHandle mh = dmh.asType(dmh.type().changeReturnType(Object.class));
+                // wrap any exception thrown with InvocationTargetException
+                mh = MethodHandles.catchException(mh, Throwable.class, wrapWithInvocationTargetExceptionMH);
+                // spread array of arguments among parameters (skipping 1st parameter - target)
+                mh = mh.asSpreader(1, Object[].class, type.parameterCount());
+                // change target type to Object
+                mh = mh.asType(methodType(Object.class, Object.class, Object[].class));
+
+                // push MH into cache
+                MethodHandle cached = methods.putIfAbsent(method, mh);
+                if (cached != null) {
+                    superMH = cached;
+                } else {
+                    superMH = mh;
+                }
+            }
+            return superMH;
+        }
+
+
+        /**
+         * Finds the first proxy interface that declares the given method
+         * directly or indirectly.
+         *
+         * @throws IllegalArgumentException if not found
+         */
+        private static Class<?> findProxyInterfaceOrElseThrow(Class<?> proxyClass, Method method) {
+            Class<?> declaringClass = method.getDeclaringClass();
+            if (!declaringClass.isInterface()) {
+                throw new IllegalArgumentException("\"" + method +
+                                                   "\" is not a method declared in the proxy class");
+            }
+
+            List<Class<?>> proxyInterfaces = Arrays.asList(proxyClass.getInterfaces());
+            // the method's declaring class is a proxy interface
+            if (proxyInterfaces.contains(declaringClass))
+                return declaringClass;
+
+            Deque<Class<?>> deque = new ArrayDeque<>();
+            Set<Class<?>> visited = new HashSet<>();
+            boolean indirectMethodRef = false;
+            for (Class<?> intf : proxyInterfaces) {
+                assert intf != declaringClass;
+                visited.add(intf);
+                deque.add(intf);
+
+                Class<?> c;
+                while ((c = deque.poll()) != null) {
+                    if (c == declaringClass) {
+                        try {
+                            // check if this method is the resolved method if referenced from
+                            // this proxy interface (i.e. this method is not implemented
+                            // by any other superinterface)
+                            Method m = intf.getMethod(method.getName(), method.getParameterTypes());
+                            if (m.getDeclaringClass() == declaringClass) {
+                                return intf;
+                            }
+                            indirectMethodRef = true;
+                        } catch (NoSuchMethodException e) {}
+
+                        // skip traversing its superinterfaces
+                        // another proxy interface may extend it and so
+                        // the method's declaring class is left unvisited.
+                        continue;
+                    }
+                    // visit all superinteraces of one proxy interface to find if
+                    // this proxy interface inherits the method directly or indirectly
+                    visited.add(c);
+                    for (Class<?> superIntf : c.getInterfaces()) {
+                        if (!visited.contains(superIntf) && !deque.contains(superIntf)) {
+                            if (superIntf == declaringClass) {
+                                deque.addFirst(superIntf);
+                            } else {
+                                deque.add(superIntf);
+                            }
+                        }
+                    }
+                }
+            }
+
+            throw new IllegalArgumentException(
+                "\"" + method +
+                (indirectMethodRef
+                 ? "\" is overridden directly or indirectly by the proxy interfaces"
+                 : "\" is not a method declared in the proxy class")
+            );
+        }
+
+        /**
+         * Wraps given cause with InvocationTargetException and throws it.
+         *
+         * @throws InvocationTargetException wrapping given cause
+         */
+        private static Object wrapWithInvocationTargetException(Throwable cause) throws InvocationTargetException {
+            throw new InvocationTargetException(cause, cause.toString());
+        }
+
+        private static final MethodHandle wrapWithInvocationTargetExceptionMH;
+
+        static {
+            try {
+                wrapWithInvocationTargetExceptionMH = MethodHandles.lookup().findStatic(
+                    SuperInvokerImpl.class,
+                    "wrapWithInvocationTargetException",
+                    methodType(Object.class, Throwable.class)
+                );
+            } catch (NoSuchMethodException | IllegalAccessException e) {
+                throw new InternalError(e);
+            }
+        }
+    } // end of SuperInvokerImpl
+
+    /**
+     * Factory method creating {@linkplain java.lang.reflect.InvocationHandler2.SuperInvoker}
+     * implementation. This method is called from static initializer of a dynamic
+     * proxy class.
+     *
+     * @param proxyLookup the full-privilege Lookup of dynamic proxy class.
+     * @return an instance of {@linkplain java.lang.reflect.InvocationHandler2.SuperInvoker}
+     *         which can be used to invoke super default methods of proxy interfaces.
+     * @since 16
+     */
+    protected static InvocationHandler2.SuperInvoker newSuperInvoker(Lookup proxyLookup) {
+        return new SuperInvokerImpl(proxyLookup);
+    }
+
+    /**
      * Returns a proxy instance for the specified interfaces
      * that dispatches method invocations to the specified invocation
      * handler.
@@ -1009,6 +1232,7 @@ public class Proxy implements java.io.Serializable {
      *          {@code null}
      *
      * @see <a href="#membership">Package and Module Membership of Proxy Class</a>
+     * @see #newProxyInstance(ClassLoader, Class[], InvocationHandler2)
      * @revised 9
      * @spec JPMS
      */
@@ -1018,9 +1242,52 @@ public class Proxy implements java.io.Serializable {
                                           InvocationHandler h) {
         Objects.requireNonNull(h);
 
-        final Class<?> caller = System.getSecurityManager() == null
-                                    ? null
-                                    : Reflection.getCallerClass();
+        final Class<?> caller = Reflection.getCallerClass();
+
+        /*
+         * Look up or generate the designated proxy class and its constructor.
+         */
+        Constructor<?> cons = getProxyConstructor(caller, loader, interfaces);
+
+        try {
+            return newProxyInstance(caller, cons, h);
+        } catch (IllegalAccessException e) {
+            throw new IllegalArgumentException(
+                "InvocationHandler is not plain and interfaces are not accessible",
+                e
+            );
+        }
+    }
+
+    /**
+     * Overloaded {@linkplain #newProxyInstance(ClassLoader, Class[], InvocationHandler)}
+     * method taking a {@linkplain InvocationHandler2} instead of plain
+     * {@linkplain InvocationHandler} parameter which allows passing lambdas
+     * taking additional {@linkplain java.lang.reflect.InvocationHandler2.SuperInvoker}
+     * argument.
+     *
+     * @param   loader the class loader to define the proxy class
+     * @param   interfaces the list of interfaces for the proxy class
+     *          to implement
+     * @param   h the invocation handler to dispatch method invocations to
+     * @return  a proxy instance with the specified invocation handler of a
+     *          proxy class that is defined by the specified class loader
+     *          and that implements the specified interfaces
+     * @throws IllegalAccessException if given InvocationHandler is not plain and
+     *                                any of given interfaces is not accessible to
+     *                                the caller of this method
+     * @see #newProxyInstance(ClassLoader, Class[], InvocationHandler)
+     * @since 16
+     */
+    @CallerSensitive
+    public static Object newProxyInstance(ClassLoader loader,
+                                          Class<?>[] interfaces,
+                                          InvocationHandler2 h)
+        throws IllegalAccessException
+    {
+        Objects.requireNonNull(h);
+
+        final Class<?> caller = Reflection.getCallerClass();
 
         /*
          * Look up or generate the designated proxy class and its constructor.
@@ -1030,18 +1297,36 @@ public class Proxy implements java.io.Serializable {
         return newProxyInstance(caller, cons, h);
     }
 
-    private static Object newProxyInstance(Class<?> caller, // null if no SecurityManager
+    private static Object newProxyInstance(Class<?> caller,
                                            Constructor<?> cons,
-                                           InvocationHandler h) {
+                                           InvocationHandler2 h)
+        throws IllegalAccessException
+    {
+        if (!PLAIN_HANDLER_CACHE.get(h.getClass())) {
+            // additional access checks are needed for non-plain handlers...
+            for (Class<?> intf : cons.getDeclaringClass().getInterfaces()) {
+                boolean isPublic = Modifier.isPublic(intf.getModifiers());
+                // same module?
+                if (intf.getModule().equals(caller.getModule())) {
+                    if (isPublic || intf.getPackageName().equals(caller.getPackageName())) continue;
+                } else {
+                    if (isPublic && intf.getModule().isExported(intf.getPackageName(), caller.getModule())) continue;
+                }
+                // else throw IAE
+                throw new IllegalAccessException(
+                    caller + " from module " + caller.getModule() +
+                    " has no access to " + intf + " in module " + intf.getModule()
+                );
+            }
+        }
+
         /*
          * Invoke its constructor with the designated invocation handler.
          */
         try {
-            if (caller != null) {
-                checkNewProxyPermission(caller, cons.getDeclaringClass());
-            }
+            checkNewProxyPermission(caller, cons.getDeclaringClass());
 
-            return cons.newInstance(new Object[]{h});
+            return cons.newInstance(h, TRUST_HANDLE);
         } catch (IllegalAccessException | InstantiationException e) {
             throw new InternalError(e.toString(), e);
         } catch (InvocationTargetException e) {
@@ -1101,18 +1386,22 @@ public class Proxy implements java.io.Serializable {
     }
 
     /**
-     * Returns the invocation handler for the specified proxy instance.
+     * Returns plain {@linkplain InvocationHandler} type of invocation handler
+     * for the specified proxy instance if it was initialized with such type of handler.
      *
      * @param   proxy the proxy instance to return the invocation handler for
      * @return  the invocation handler for the proxy instance
      * @throws  IllegalArgumentException if the argument is not a
-     *          proxy instance
+     *          proxy instance or if it is a proxy instance initialized with
+     *          invocation handler directly implementing
+     *          {@linkplain InvocationHandler2}
      * @throws  SecurityException if a security manager, <em>s</em>, is present
      *          and the caller's class loader is not the same as or an
      *          ancestor of the class loader for the invocation handler
      *          and invocation of {@link SecurityManager#checkPackageAccess
      *          s.checkPackageAccess()} denies access to the invocation
      *          handler's class.
+     * @see #getInvocationHandler2(Object)
      */
     @CallerSensitive
     public static InvocationHandler getInvocationHandler(Object proxy)
@@ -1126,7 +1415,53 @@ public class Proxy implements java.io.Serializable {
         }
 
         final Proxy p = (Proxy) proxy;
-        final InvocationHandler ih = p.h;
+        final InvocationHandler2 ih = p.h;
+        if (!(ih instanceof InvocationHandler)) {
+            throw new IllegalArgumentException("not a proxy instance with plain InvocationHandler");
+        }
+        if (System.getSecurityManager() != null) {
+            Class<?> ihClass = ih.getClass();
+            Class<?> caller = Reflection.getCallerClass();
+            if (ReflectUtil.needsPackageAccessCheck(caller.getClassLoader(),
+                                                    ihClass.getClassLoader()))
+            {
+                ReflectUtil.checkPackageAccess(ihClass);
+            }
+        }
+
+        return (InvocationHandler)ih;
+    }
+
+    /**
+     * Returns {@linkplain InvocationHandler2} type
+     * of invocation handler for the specified proxy instance.
+     *
+     * @param   proxy the proxy instance to return the invocation handler for
+     * @return  the invocation handler for the proxy instance
+     * @throws  IllegalArgumentException if the argument is not a
+     *          proxy instance
+     * @throws  SecurityException if a security manager, <em>s</em>, is present
+     *          and the caller's class loader is not the same as or an
+     *          ancestor of the class loader for the invocation handler
+     *          and invocation of {@link SecurityManager#checkPackageAccess
+     *          s.checkPackageAccess()} denies access to the invocation
+     *          handler's class.
+     * @since 16
+     * @see #getInvocationHandler(Object)
+     */
+    @CallerSensitive
+    public static InvocationHandler2 getInvocationHandler2(Object proxy)
+    throws IllegalArgumentException
+    {
+        /*
+         * Verify that the object is actually a proxy instance.
+         */
+        if (!isProxyClass(proxy.getClass())) {
+            throw new IllegalArgumentException("not a proxy instance");
+        }
+
+        final Proxy p = (Proxy) proxy;
+        final InvocationHandler2 ih = p.h;
         if (System.getSecurityManager() != null) {
             Class<?> ihClass = ih.getClass();
             Class<?> caller = Reflection.getCallerClass();
@@ -1143,134 +1478,32 @@ public class Proxy implements java.io.Serializable {
     private static final String PROXY_PACKAGE_PREFIX = ReflectUtil.PROXY_PACKAGE;
 
     /**
-     * A cache of Method -> MethodHandle for default methods.
+     * A special instance of Object passed to
+     * {@linkplain #Proxy(InvocationHandler2, Object)}
+     * constructor to prove it has been called from trusted code that has access
+     * to this field.
      */
-    private static final ClassValue<ConcurrentHashMap<Method, MethodHandle>>
-            DEFAULT_METHODS_MAP = new ClassValue<>() {
+    private static final Object TRUST_HANDLE = new Object();
+
+    /**
+     * A cache of flag discriminating plain handlers (implementing
+     * {@linkplain InvocationHandler} and not overriding
+     * {@linkplain InvocationHandler2#invoke(InvocationHandler2.SuperInvoker, Object, Method, Object[])} method)
+     * from handlers that override/implement the method).
+     */
+    private static final ClassValue<Boolean> PLAIN_HANDLER_CACHE = new ClassValue<>() {
         @Override
-        protected ConcurrentHashMap<Method, MethodHandle> computeValue(Class<?> type) {
-            return new ConcurrentHashMap<>(4);
+        protected Boolean computeValue(Class<?> type) {
+            assert InvocationHandler2.class.isAssignableFrom(type);
+            try {
+                Method m = type.getMethod(
+                    "invoke", InvocationHandler2.SuperInvoker.class,
+                    Object.class, Method.class, Object[].class
+                );
+                return m.getDeclaringClass() == InvocationHandler.class;
+            } catch (NoSuchMethodException e) {
+                throw (Error) new NoSuchMethodError(e.getMessage()).initCause(e);
+            }
         }
     };
-
-    static ConcurrentHashMap<Method, MethodHandle> defaultMethodMap(Class<?> proxyClass) {
-        assert isProxyClass(proxyClass);
-        return DEFAULT_METHODS_MAP.get(proxyClass);
-    }
-
-    static final Object[] EMPTY_ARGS = new Object[0];
-
-    /**
-     * Finds the first proxy interface that declares the given method
-     * directly or indirectly.
-     *
-     * @throws IllegalArgumentException if not found
-     */
-    static Class<?> findProxyInterfaceOrElseThrow(Class<?> proxyClass, Method method) {
-        Class<?> declaringClass = method.getDeclaringClass();
-        if (!declaringClass.isInterface()) {
-            throw new IllegalArgumentException("\"" + method +
-                    "\" is not a method declared in the proxy class");
-        }
-
-        List<Class<?>> proxyInterfaces = Arrays.asList(proxyClass.getInterfaces());
-        // the method's declaring class is a proxy interface
-        if (proxyInterfaces.contains(declaringClass))
-            return declaringClass;
-
-        Deque<Class<?>> deque = new ArrayDeque<>();
-        Set<Class<?>> visited = new HashSet<>();
-        boolean indirectMethodRef = false;
-        for (Class<?> intf : proxyInterfaces) {
-            assert intf != declaringClass;
-            visited.add(intf);
-            deque.add(intf);
-
-            Class<?> c;
-            while ((c = deque.poll()) != null) {
-                if (c == declaringClass) {
-                    try {
-                        // check if this method is the resolved method if referenced from
-                        // this proxy interface (i.e. this method is not implemented
-                        // by any other superinterface)
-                        Method m = intf.getMethod(method.getName(), method.getParameterTypes());
-                        if (m.getDeclaringClass() == declaringClass) {
-                            return intf;
-                        }
-                        indirectMethodRef = true;
-                    } catch (NoSuchMethodException e) {}
-
-                    // skip traversing its superinterfaces
-                    // another proxy interface may extend it and so
-                    // the method's declaring class is left unvisited.
-                    continue;
-                }
-                // visit all superinteraces of one proxy interface to find if
-                // this proxy interface inherits the method directly or indirectly
-                visited.add(c);
-                for (Class<?> superIntf : c.getInterfaces()) {
-                    if (!visited.contains(superIntf) && !deque.contains(superIntf)) {
-                        if (superIntf == declaringClass) {
-                            deque.addFirst(superIntf);
-                        } else {
-                            deque.add(superIntf);
-                        }
-                    }
-                }
-            }
-        }
-
-        throw new IllegalArgumentException("\"" + method + (indirectMethodRef
-                ? "\" is overridden directly or indirectly by the proxy interfaces"
-                : "\" is not a method declared in the proxy class"));
-    }
-
-    /**
-     * Returns a Lookup object for the lookup class which is the class of this
-     * proxy instance.
-     *
-     * @return a lookup for proxy class of this proxy instance
-     */
-    static Lookup proxyClassLookup(Lookup caller, Class<?> proxyClass) {
-        return AccessController.doPrivileged(new PrivilegedAction<>() {
-            @Override
-            public Lookup run() {
-                try {
-                    Method m = proxyClass.getDeclaredMethod("proxyClassLookup", Lookup.class);
-                    m.setAccessible(true);
-                    return (Lookup) m.invoke(null, caller);
-                } catch (ReflectiveOperationException e) {
-                    throw new InternalError(e);
-                }
-            }
-        });
-    }
-
-    /**
-     * Wraps given cause with InvocationTargetException and throws it.
-     *
-     * @throws InvocationTargetException wrapping given cause
-     */
-    private static Object wrapWithInvocationTargetException(Throwable cause) throws InvocationTargetException {
-        throw new InvocationTargetException(cause, cause.toString());
-    }
-
-    @Stable
-    private static MethodHandle wrapWithInvocationTargetExceptionMH;
-
-    static MethodHandle wrapWithInvocationTargetExceptionMH() {
-        MethodHandle mh = wrapWithInvocationTargetExceptionMH;
-        if (mh == null) {
-            try {
-                wrapWithInvocationTargetExceptionMH = mh = MethodHandles.lookup().findStatic(
-                    Proxy.class,
-                    "wrapWithInvocationTargetException",
-                    MethodType.methodType(Object.class, Throwable.class)
-                );
-            } catch (NoSuchMethodException | IllegalAccessException e) {
-                throw new InternalError(e);
-            }
-        }
-        return mh;
-    }
 }

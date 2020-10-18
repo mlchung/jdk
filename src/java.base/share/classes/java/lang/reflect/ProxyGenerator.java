@@ -60,27 +60,34 @@ final class ProxyGenerator extends ClassWriter {
     private static final String JL_OBJECT = "java/lang/Object";
     private static final String JL_THROWABLE = "java/lang/Throwable";
     private static final String JL_CLASS_NOT_FOUND_EX = "java/lang/ClassNotFoundException";
-    private static final String JL_ILLEGAL_ACCESS_EX = "java/lang/IllegalAccessException";
 
     private static final String JL_NO_CLASS_DEF_FOUND_ERROR = "java/lang/NoClassDefFoundError";
     private static final String JL_NO_SUCH_METHOD_EX = "java/lang/NoSuchMethodException";
     private static final String JL_NO_SUCH_METHOD_ERROR = "java/lang/NoSuchMethodError";
-    private static final String JLI_LOOKUP = "java/lang/invoke/MethodHandles$Lookup";
     private static final String JLI_METHODHANDLES = "java/lang/invoke/MethodHandles";
+    private static final String JLI_LOOKUP = "java/lang/invoke/MethodHandles$Lookup";
 
     private static final String JLR_INVOCATION_HANDLER = "java/lang/reflect/InvocationHandler";
+    private static final String JLR_INVOCATION_HANDLER2 = "java/lang/reflect/InvocationHandler2";
+    private static final String JLR_SUPER_INVOKER = "java/lang/reflect/InvocationHandler2$SuperInvoker";
     private static final String JLR_PROXY = "java/lang/reflect/Proxy";
     private static final String JLR_UNDECLARED_THROWABLE_EX = "java/lang/reflect/UndeclaredThrowableException";
+    private static final String JLR_METHOD = "java/lang/reflect/Method";
 
-    private static final String LJL_CLASS = "Ljava/lang/Class;";
-    private static final String LJLR_METHOD = "Ljava/lang/reflect/Method;";
-    private static final String LJLR_INVOCATION_HANDLER = "Ljava/lang/reflect/InvocationHandler;";
+    private static final String LJL_CLASS = "L" + JL_CLASS + ";";
+    private static final String LJL_OBJECT = "L" + JL_OBJECT + ";";
+    private static final String LJLI_LOOKUP = "L" + JLI_LOOKUP + ";";
+    private static final String LJLR_METHOD = "L" + JLR_METHOD + ";";
+    private static final String LJLR_INVOCATION_HANDLER = "L" + JLR_INVOCATION_HANDLER + ";";
+    private static final String LJLR_INVOCATION_HANDLER2 = "L" + JLR_INVOCATION_HANDLER2 + ";";
+    private static final String LJLR_SUPER_INVOKER = "L" + JLR_SUPER_INVOKER + ";";
 
-    private static final String MJLR_INVOCATIONHANDLER = "(Ljava/lang/reflect/InvocationHandler;)V";
+    private static final String MJLR_INVOCATION_HANDLER_V = "(" + LJLR_INVOCATION_HANDLER + ")V";
+    private static final String MJLR_INVOCATION_HANDLER2_JL_OBJECT_V = "(" + LJLR_INVOCATION_HANDLER2 + LJL_OBJECT + ")V";
 
     private static final String NAME_CTOR = "<init>";
     private static final String NAME_CLINIT = "<clinit>";
-    private static final String NAME_LOOKUP_ACCESSOR = "proxyClassLookup";
+    private static final String NAME_SUPER_INVOKER_FIELD = "si";
 
     private static final Class<?>[] EMPTY_CLASS_ARRAY = new Class<?>[0];
 
@@ -486,12 +493,19 @@ final class ProxyGenerator extends ClassWriter {
         }
 
         generateConstructor();
+        generateTrustedConstructor();
+
+        // add static field for the SuperInvoker object
+        visitField(Modifier.PRIVATE | Modifier.STATIC | Modifier.FINAL,
+                   NAME_SUPER_INVOKER_FIELD, LJLR_SUPER_INVOKER,
+                   null, null);
 
         for (List<ProxyMethod> sigmethods : proxyMethods.values()) {
             for (ProxyMethod pm : sigmethods) {
                 // add static field for the Method object
-                visitField(Modifier.PRIVATE | Modifier.STATIC, pm.methodFieldName,
-                        LJLR_METHOD, null, null);
+                visitField(Modifier.PRIVATE | Modifier.STATIC | Modifier.FINAL,
+                           pm.methodFieldName, LJLR_METHOD,
+                           null, null);
 
                 // Generate code for proxy method
                 pm.generateMethod(this, className);
@@ -499,7 +513,6 @@ final class ProxyGenerator extends ClassWriter {
         }
 
         generateStaticInitializer();
-        generateLookupAccessor();
         return toByteArray();
     }
 
@@ -558,17 +571,43 @@ final class ProxyGenerator extends ClassWriter {
     }
 
     /**
-     * Generate the constructor method for the proxy class.
+     * Generate the constructor method for the proxy class chained to
+     * {@linkplain Proxy#Proxy(InvocationHandler)} which is meant to be called by
+     * user via reflection.
      */
     private void generateConstructor() {
         MethodVisitor ctor = visitMethod(Modifier.PUBLIC, NAME_CTOR,
-                MJLR_INVOCATIONHANDLER, null, null);
+                                         MJLR_INVOCATION_HANDLER_V, null, null);
         ctor.visitParameter(null, 0);
         ctor.visitCode();
         ctor.visitVarInsn(ALOAD, 0);
         ctor.visitVarInsn(ALOAD, 1);
         ctor.visitMethodInsn(INVOKESPECIAL, JLR_PROXY, NAME_CTOR,
-                MJLR_INVOCATIONHANDLER, false);
+                             MJLR_INVOCATION_HANDLER_V, false);
+        ctor.visitInsn(RETURN);
+
+        // Maxs computed by ClassWriter.COMPUTE_FRAMES, these arguments ignored
+        ctor.visitMaxs(-1, -1);
+        ctor.visitEnd();
+    }
+
+    /**
+     * Generate the constructor method for the proxy class chained to
+     * {@linkplain Proxy#Proxy(InvocationHandler2, Object)} which is meant to be called
+     * from {@linkplain Proxy#newProxyInstance(ClassLoader, Class[], InvocationHandler)} or
+     * {@linkplain Proxy#newProxyInstance(ClassLoader, Class[], InvocationHandler2)}.
+     */
+    private void generateTrustedConstructor() {
+        MethodVisitor ctor = visitMethod(Modifier.PUBLIC, NAME_CTOR,
+                                         MJLR_INVOCATION_HANDLER2_JL_OBJECT_V, null, null);
+        ctor.visitParameter(null, 0);
+        ctor.visitParameter(null, 0);
+        ctor.visitCode();
+        ctor.visitVarInsn(ALOAD, 0);
+        ctor.visitVarInsn(ALOAD, 1);
+        ctor.visitVarInsn(ALOAD, 2);
+        ctor.visitMethodInsn(INVOKESPECIAL, JLR_PROXY, NAME_CTOR,
+                             MJLR_INVOCATION_HANDLER2_JL_OBJECT_V, false);
         ctor.visitInsn(RETURN);
 
         // Maxs computed by ClassWriter.COMPUTE_FRAMES, these arguments ignored
@@ -595,6 +634,19 @@ final class ProxyGenerator extends ClassWriter {
                 JL_CLASS_NOT_FOUND_EX);
 
         mv.visitLabel(L_startBlock);
+
+        // initialize SuperInvoker field
+        // 1st create a MethodHandles.lookup() instance...
+        mv.visitMethodInsn(INVOKESTATIC, JLI_METHODHANDLES, "lookup",
+                           "()" + LJLI_LOOKUP, false);
+        // ...wrap it with Proxy.newSuperInvoker(Lookup) instance...
+        mv.visitMethodInsn(INVOKESTATIC, JLR_PROXY, "newSuperInvoker",
+                           "(" + LJLI_LOOKUP + ")" + LJLR_SUPER_INVOKER, false);
+        // ...and assign it to static final SuperInvoker si field...
+        mv.visitFieldInsn(PUTSTATIC,
+                          dotToSlash(className),
+                          NAME_SUPER_INVOKER_FIELD, LJLR_SUPER_INVOKER);
+        // initialize Method fields
         for (List<ProxyMethod> sigmethods : proxyMethods.values()) {
             for (ProxyMethod pm : sigmethods) {
                 pm.codeFieldInitialization(mv, className);
@@ -623,46 +675,6 @@ final class ProxyGenerator extends ClassWriter {
         mv.visitMethodInsn(INVOKEVIRTUAL, JL_THROWABLE,
                 "getMessage", "()Ljava/lang/String;", false);
         mv.visitMethodInsn(INVOKESPECIAL, JL_NO_CLASS_DEF_FOUND_ERROR,
-                "<init>", "(Ljava/lang/String;)V", false);
-        mv.visitInsn(ATHROW);
-
-        // Maxs computed by ClassWriter.COMPUTE_FRAMES, these arguments ignored
-        mv.visitMaxs(-1, -1);
-        mv.visitEnd();
-    }
-
-    /**
-     * Generate the static lookup accessor method that returns the Lookup
-     * on this proxy class if the caller's lookup class is java.lang.reflect.InvocationHandler;
-     * otherwise, IllegalAccessException is thrown
-     */
-    private void generateLookupAccessor() {
-        MethodVisitor mv = visitMethod(ACC_PRIVATE | ACC_STATIC, NAME_LOOKUP_ACCESSOR,
-                "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/invoke/MethodHandles$Lookup;", null,
-                new String[] { JL_ILLEGAL_ACCESS_EX });
-        mv.visitCode();
-        Label L_illegalAccess = new Label();
-
-        mv.visitVarInsn(ALOAD, 0);
-        mv.visitMethodInsn(INVOKEVIRTUAL, JLI_LOOKUP, "lookupClass",
-                "()Ljava/lang/Class;", false);
-        mv.visitLdcInsn(Type.getType(InvocationHandler.class));
-        mv.visitJumpInsn(IF_ACMPNE, L_illegalAccess);
-        mv.visitVarInsn(ALOAD, 0);
-        mv.visitMethodInsn(INVOKEVIRTUAL, JLI_LOOKUP, "hasFullPrivilegeAccess",
-                "()Z", false);
-        mv.visitJumpInsn(IFEQ, L_illegalAccess);
-        mv.visitMethodInsn(INVOKESTATIC, JLI_METHODHANDLES, "lookup",
-                "()Ljava/lang/invoke/MethodHandles$Lookup;", false);
-        mv.visitInsn(ARETURN);
-
-        mv.visitLabel(L_illegalAccess);
-        mv.visitTypeInsn(Opcodes.NEW, JL_ILLEGAL_ACCESS_EX);
-        mv.visitInsn(DUP);
-        mv.visitVarInsn(ALOAD, 0);
-        mv.visitMethodInsn(INVOKEVIRTUAL, JLI_LOOKUP, "toString",
-                "()Ljava/lang/String;", false);
-        mv.visitMethodInsn(INVOKESPECIAL, JL_ILLEGAL_ACCESS_EX,
                 "<init>", "(Ljava/lang/String;)V", false);
         mv.visitInsn(ATHROW);
 
@@ -748,12 +760,18 @@ final class ProxyGenerator extends ClassWriter {
             }
             mv.visitLabel(L_startBlock);
 
+            // InvocationHandler2 h
             mv.visitVarInsn(ALOAD, 0);
             mv.visitFieldInsn(GETFIELD, JLR_PROXY, handlerFieldName,
-                    LJLR_INVOCATION_HANDLER);
+                              LJLR_INVOCATION_HANDLER2);
+            // SuperInvoker si
+            mv.visitFieldInsn(GETSTATIC, dotToSlash(className), NAME_SUPER_INVOKER_FIELD,
+                              LJLR_SUPER_INVOKER);
+            // this (proxy)
             mv.visitVarInsn(ALOAD, 0);
+            // Method mNN
             mv.visitFieldInsn(GETSTATIC, dotToSlash(className), methodFieldName,
-                    LJLR_METHOD);
+                              LJLR_METHOD);
 
             if (parameterTypes.length > 0) {
                 // Create an array and fill with the parameters converting primitives to wrappers
@@ -769,10 +787,12 @@ final class ProxyGenerator extends ClassWriter {
                 mv.visitInsn(Opcodes.ACONST_NULL);
             }
 
-            mv.visitMethodInsn(INVOKEINTERFACE, JLR_INVOCATION_HANDLER,
-                    "invoke",
-                    "(Ljava/lang/Object;Ljava/lang/reflect/Method;" +
-                            "[Ljava/lang/Object;)Ljava/lang/Object;", true);
+            mv.visitMethodInsn(
+                INVOKEINTERFACE, JLR_INVOCATION_HANDLER2,
+                "invoke",
+                "(" + LJLR_SUPER_INVOKER + LJL_OBJECT + LJLR_METHOD + "[" + LJL_OBJECT + ")" + LJL_OBJECT,
+                true
+            );
 
             if (returnType == void.class) {
                 mv.visitInsn(POP);
