@@ -23,13 +23,11 @@
 
 package jdk.test;
 
-import java.lang.reflect.DelegatingInvocationHandler;
+import java.lang.reflect.NewInvocationHandler;
 import java.lang.reflect.InaccessibleObjectException;
-import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.lang.reflect.UndeclaredThrowableException;
 
 /**
  * Tests invocation of default methods in exported types and inaccessible types
@@ -37,18 +35,8 @@ import java.lang.reflect.UndeclaredThrowableException;
  */
 public class DefaultMethods {
     private final static Module TEST_MODULE = DefaultMethods.class.getModule();
-    private final static TestInvocationHandler IH = new TestInvocationHandler();
-
-    static class TestInvocationHandler extends DelegatingInvocationHandler {
-        @Override
-        public Object invoke(Object proxy, Method method, Object[] params) throws Throwable {
-            return invokeDefault(proxy, method, params);
-        }
-
-        // for testing purpose
-        public Object invokeDefaultMethod(Object proxy, Method method, Object[] params) throws InvocationTargetException {
-            return invokeDefault(proxy, method, params);
-        }
+    private final static NewInvocationHandler IH = (invoker, proxy, method, params) -> {
+        return invoker.invoke(proxy, method, params);
     };
 
     public static void main(String... args) throws Exception {
@@ -86,7 +74,7 @@ public class DefaultMethods {
         try {
             Proxy.newProxyInstance(TEST_MODULE.getClassLoader(), new Class<?>[]{intf}, IH);
             throw new RuntimeException("IAE not thrown");
-        } catch (InaccessibleObjectException e) {
+        } catch (IllegalCallerException e) {
         }
     }
 }

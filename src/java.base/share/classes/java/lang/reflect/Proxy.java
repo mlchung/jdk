@@ -469,7 +469,7 @@ public class Proxy implements java.io.Serializable {
             throws IllegalAccessException
     {
         for (Class<?> c : interfaces) {
-            Class<?> targetClass = DelegatingInvocationHandler.class;
+            Class<?> targetClass = NewInvocationHandler.class;
             if (!Reflection.verifyMemberAccess(caller, c, targetClass, Modifier.PUBLIC)) {
                 // access denied
                 throw Reflection.newIllegalAccessException(caller, c, targetClass, Modifier.PUBLIC);
@@ -665,7 +665,7 @@ public class Proxy implements java.io.Serializable {
          * at defineClass time.
          *
          * This method does not call the public 1-arg constructor which
-         * does not support DelegatingInvocationHandler.
+         * does not support NewInvocationHandler.
          *
          * Must call the checkProxyAccess method to perform permission checks
          * before calling this.
@@ -1011,7 +1011,7 @@ public class Proxy implements java.io.Serializable {
      *               permission denies access.</li>
      *          </ul>
      * @throws  IllegalCallerException if the given invocation handler, {@code h},
-     *          is a {@link DelegatingInvocationHandler DelegatingInvocationHandler}
+     *          is a {@link NewInvocationHandler NewInvocationHandler}
      *          and the caller class has no access to any of the proxy interfaces
      * @throws  NullPointerException if the {@code interfaces} array
      *          argument or any of its elements are {@code null}, or
@@ -1030,7 +1030,7 @@ public class Proxy implements java.io.Serializable {
     {
         Objects.requireNonNull(h);
 
-        boolean requireCallerAccessCheck = h instanceof DelegatingInvocationHandler;
+        boolean requireCallerAccessCheck = h instanceof NewInvocationHandler;
         Class<?> caller = null;
         ClassLoader callerLoader = null;
         if (requireCallerAccessCheck || System.getSecurityManager() != null) {
@@ -1133,7 +1133,7 @@ public class Proxy implements java.io.Serializable {
      * @throws  IllegalArgumentException if the argument is not a
      *          proxy instance
      * @throws  IllegalCallerException if the invocation handler is
-     *          a {@link DelegatingInvocationHandler DelegatingInvocationHandler}
+     *          a {@link NewInvocationHandler NewInvocationHandler}
      *          and the caller has no access to any of the proxy interfaces
      *          of the given proxy instance
      * @throws  SecurityException if a security manager, <em>s</em>, is present
@@ -1156,7 +1156,7 @@ public class Proxy implements java.io.Serializable {
 
         final Proxy p = (Proxy) proxy;
         final InvocationHandler ih = p.h;
-        if (ih instanceof DelegatingInvocationHandler) {
+        if (ih instanceof NewInvocationHandler) {
             try {
                 checkDefaultMethodAccess(Reflection.getCallerClass(), p.getClass().getInterfaces());
             } catch (IllegalAccessException e) {

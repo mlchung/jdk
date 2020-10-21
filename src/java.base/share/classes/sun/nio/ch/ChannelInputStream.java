@@ -68,7 +68,7 @@ public class ChannelInputStream
 
     protected final ReadableByteChannel ch;
     private ByteBuffer bb = null;
-    private byte[] bs = null;           // Invoker's previous array
+    private byte[] bs = null;           // DefaultMethodInvoker's previous array
     private byte[] b1 = null;
 
     public ChannelInputStream(ReadableByteChannel ch) {

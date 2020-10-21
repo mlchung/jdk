@@ -101,7 +101,7 @@ public class MHIllegalAccess implements Opcodes {
       HashSet<String> in_bogus = new HashSet<String>();
         in_bogus.add("InvokeSeveralWays");
         in_bogus.add("MyFunctionalInterface");
-        in_bogus.add("Invoker");
+        in_bogus.add("DefaultMethodInvoker");
 
         BogoLoader bl = new BogoLoader(in_bogus, replace);
         Class<?> isw = bl.loadClass("InvokeSeveralWays");

@@ -334,7 +334,7 @@ public class Basic {
                         }
                     }
                     if (!found)
-                        throw new RuntimeException("Invoker thread not found");
+                        throw new RuntimeException("DefaultMethodInvoker thread not found");
                 }
             } finally {
                 ch.close();

@@ -4381,7 +4381,7 @@ return invoker;
      *
      * <p style="font-size:smaller;">
      * <em>Discussion:</em>
-     * Invoker method handles can be useful when working with variable method handles
+     * DefaultMethodInvoker method handles can be useful when working with variable method handles
      * of unknown types.
      * For example, to emulate an {@code invokeExact} call to a variable method
      * handle {@code M}, extract its type {@code T},

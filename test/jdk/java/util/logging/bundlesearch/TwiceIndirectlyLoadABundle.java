@@ -53,7 +53,7 @@ public class TwiceIndirectlyLoadABundle {
         // class loader, for this one we don't want to expose the resource directory
         // to the next class.  That way we're invoking the LoadItUp2Invoker class
         // from this class that does have access to the resources (two levels
-        // up the call stack), but the Invoker itself won't have access to resource
+        // up the call stack), but the DefaultMethodInvoker itself won't have access to resource
         urls[0] = Paths.get(testDir,"resources").toUri().toURL();
         urls[1] = Paths.get(testClassesDir).toUri().toURL();
 

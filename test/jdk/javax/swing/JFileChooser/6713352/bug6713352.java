@@ -54,7 +54,7 @@ public class bug6713352 {
                 synchronized (systemView) { // Get SystemView lock
                     new JFileChooser(systemView);
 
-                    // Wait a little bit. BasicDirectoryModel will lock Invoker and stop on
+                    // Wait a little bit. BasicDirectoryModel will lock DefaultMethodInvoker and stop on
                     // the bug6713352.MyFileSystemView.getFiles() method
                     try {
                         Thread.sleep(5000);

@@ -32,7 +32,7 @@ public class InvokeSeveralWays {
     public static int test(String args[], Class expected) throws Exception {
         int failures = 0;
         try {
-            Class.forName("Invoker").getMethod("invoke").invoke(null);
+            Class.forName("DefaultMethodInvoker").getMethod("invoke").invoke(null);
             System.out.println("FAIL: No exception throw, probably failed to load modified bytecodes for MethodSupplier");
             failures++;
         } catch (InvocationTargetException e) {
@@ -51,7 +51,7 @@ public class InvokeSeveralWays {
         }
         System.out.println();
         try {
-            Class.forName("Invoker").getMethod("invoke2").invoke(null);
+            Class.forName("DefaultMethodInvoker").getMethod("invoke2").invoke(null);
             System.out.println("FAIL: No exception throw, probably failed to load modified bytecodes for MethodSupplier");
             failures++;
         } catch (InvocationTargetException e) {

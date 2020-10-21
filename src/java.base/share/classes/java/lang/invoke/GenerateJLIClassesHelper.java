@@ -166,7 +166,7 @@ class GenerateJLIClassesHelper {
                         mt.parameterType(0) != Object.class ||
                         mt.parameterType(lastParam) != Object.class) {
                     throw new RuntimeException(
-                            "Invoker type parameter must start and end with Object: " + invokerType);
+                            "DefaultMethodInvoker type parameter must start and end with Object: " + invokerType);
                 }
                 mt = mt.dropParameterTypes(lastParam, lastParam + 1);
                 invokerMethodTypes[index] = mt.dropParameterTypes(0, 1);

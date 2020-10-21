@@ -1253,7 +1253,7 @@ final class Win32ShellFolder2 extends ShellFolder {
 
 
     public void sortChildren(final List<? extends File> files) {
-        // To avoid loads of synchronizations with Invoker and improve performance we
+        // To avoid loads of synchronizations with DefaultMethodInvoker and improve performance we
         // synchronize the whole code of the sort method once
         invoke(new Callable<Void>() {
             public Void call() {

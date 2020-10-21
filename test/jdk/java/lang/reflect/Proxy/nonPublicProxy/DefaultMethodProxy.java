@@ -78,10 +78,10 @@ public class DefaultMethodProxy {
             // this class has no access to the proxy
             Proxy.getInvocationHandler(proxy);
             assertTrue(false);
-        } catch (InaccessibleObjectException e) {}
+        } catch (IllegalCallerException e) {}
     }
 
-    @Test(dataProvider = "nonPublicIntfs", expectedExceptions = { InaccessibleObjectException.class})
+    @Test(dataProvider = "nonPublicIntfs", expectedExceptions = { IllegalCallerException.class})
     public static void noAccess(Class<?>[] intfs, String unused) throws Exception {
         // this class has no access to non-public interface in another package
         Proxy.newProxyInstance(DefaultMethodProxy.class.getClassLoader(), intfs, IH);
@@ -100,17 +100,14 @@ public class DefaultMethodProxy {
     }
 
     // invocation handler with access to the non-public interface in package p
-    private static final DelegatingInvocationHandler IH = new DelegatingInvocationHandler() {
-        @Override
-        public Object invoke(Object proxy, Method method, Object[] params) throws Throwable {
-            System.out.format("Proxy for %s: invoking %s%n",
-                    Arrays.stream(proxy.getClass().getInterfaces())
-                            .map(Class::getName)
-                            .collect(Collectors.joining(", ")), method.getName());
-            if (method.isDefault()) {
-                return invokeDefault(proxy, method, params);
-            }
-            throw new UnsupportedOperationException(method.toString());
+    private static final NewInvocationHandler IH = (invoker, proxy, method, params) -> {
+        System.out.format("Proxy for %s: invoking %s%n",
+                          Arrays.stream(proxy.getClass().getInterfaces())
+                                .map(Class::getName)
+                                .collect(Collectors.joining(", ")), method.getName());
+        if (method.isDefault()) {
+            return invoker.invoke(proxy, method, params);
         }
+        throw new UnsupportedOperationException(method.toString());
     };
 }

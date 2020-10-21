@@ -141,7 +141,7 @@ public final class Channels {
         return new OutputStream() {
 
             private ByteBuffer bb;
-            private byte[] bs;       // Invoker's previous array
+            private byte[] bs;       // DefaultMethodInvoker's previous array
             private byte[] b1;
 
             @Override
@@ -200,7 +200,7 @@ public final class Channels {
         return new InputStream() {
 
             private ByteBuffer bb;
-            private byte[] bs;           // Invoker's previous array
+            private byte[] bs;           // DefaultMethodInvoker's previous array
             private byte[] b1;
 
             @Override
@@ -275,7 +275,7 @@ public final class Channels {
         return new OutputStream() {
 
             private ByteBuffer bb;
-            private byte[] bs;   // Invoker's previous array
+            private byte[] bs;   // DefaultMethodInvoker's previous array
             private byte[] b1;
 
             @Override

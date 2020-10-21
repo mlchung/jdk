@@ -75,7 +75,7 @@ public class InvokerGC {
 
         WB.clearInlineCaches(true); // Preserve static stubs.
 
-        test(); // Trigger call site re-resolution. Invoker LambdaForm should stay the same.
+        test(); // Trigger call site re-resolution. DefaultMethodInvoker LambdaForm should stay the same.
 
         System.out.println("TEST PASSED");
     }

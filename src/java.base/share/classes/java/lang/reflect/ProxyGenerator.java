@@ -609,7 +609,7 @@ final class ProxyGenerator extends ClassWriter {
 
     /**
      * Generate the static "checkInvocationHandler" method that throws IAE
-     * if the given invocation handler is a DelegatingInvocationHandler.
+     * if the given invocation handler is a NewInvocationHandler.
      */
     private void generateCheckInvocationHandler() {
         MethodVisitor mv = visitMethod(Modifier.PRIVATE|Modifier.STATIC,
@@ -618,11 +618,11 @@ final class ProxyGenerator extends ClassWriter {
 
         mv.visitCode();
         mv.visitVarInsn(ALOAD, 0);
-        mv.visitTypeInsn(INSTANCEOF, Type.getInternalName(DelegatingInvocationHandler.class));
+        mv.visitTypeInsn(INSTANCEOF, Type.getInternalName(NewInvocationHandler.class));
         mv.visitJumpInsn(IFEQ, L_return);
         mv.visitTypeInsn(Opcodes.NEW, JL_ILLEGAL_ARGUMENT_EX);
         mv.visitInsn(DUP);
-        mv.visitLdcInsn("`h` is a DelegatingInvocationHandler");
+        mv.visitLdcInsn("`h` is a NewInvocationHandler");
         mv.visitMethodInsn(INVOKESPECIAL, JL_ILLEGAL_ARGUMENT_EX,
                 "<init>", "(Ljava/lang/String;)V", false);
         mv.visitInsn(ATHROW);
@@ -693,7 +693,7 @@ final class ProxyGenerator extends ClassWriter {
 
     /**
      * Generate the static lookup accessor method that returns the Lookup
-     * on this proxy class if the caller's lookup class is DelegatingInvocationHandler;
+     * on this proxy class if the caller's lookup class is DefaultMethodInvoker;
      * otherwise, IllegalAccessException is thrown
      */
     private void generateLookupAccessor() {
@@ -706,7 +706,7 @@ final class ProxyGenerator extends ClassWriter {
         mv.visitVarInsn(ALOAD, 0);
         mv.visitMethodInsn(INVOKEVIRTUAL, JLI_LOOKUP, "lookupClass",
                 "()Ljava/lang/Class;", false);
-        mv.visitLdcInsn(Type.getType(DelegatingInvocationHandler.class));
+        mv.visitLdcInsn(Type.getType(NewInvocationHandler.DefaultMethodInvoker.class));
 
         mv.visitJumpInsn(IF_ACMPNE, L_illegalAccess);
         mv.visitVarInsn(ALOAD, 0);

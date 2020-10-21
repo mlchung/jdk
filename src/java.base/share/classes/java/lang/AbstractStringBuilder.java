@@ -1643,7 +1643,7 @@ abstract class AbstractStringBuilder implements Appendable, CharSequence {
     }
 
     /*
-     * Invoker guarantees it is in UTF16 (inflate itself for asb), if two
+     * DefaultMethodInvoker guarantees it is in UTF16 (inflate itself for asb), if two
      * coders are different and the dstBegin has enough space
      *
      * @param dstBegin  the char index, not offset of byte[]

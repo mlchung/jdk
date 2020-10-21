@@ -3599,7 +3599,7 @@ public final class String
      * Copy character bytes from this string into dst starting at dstBegin.
      * This method doesn't perform any range checking.
      *
-     * Invoker guarantees: dst is in UTF16 (inflate itself for asb), if two
+     * DefaultMethodInvoker guarantees: dst is in UTF16 (inflate itself for asb), if two
      * coders are different, and dst is big enough (range check)
      *
      * @param dstBegin  the char index, not offset of byte[]

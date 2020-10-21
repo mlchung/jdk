@@ -307,7 +307,7 @@ public class BasicDirectoryModel extends AbstractListModel<Object> implements Pr
             Vector<File> newFiles = new Vector<File>();
 
             // run through the file list, add directories and selectable files to fileCache
-            // Note that this block must be OUTSIDE of Invoker thread because of
+            // Note that this block must be OUTSIDE of DefaultMethodInvoker thread because of
             // deadlock possibility with custom synchronized FileSystemView
             for (File file : list) {
                 if (filechooser.accept(file)) {
@@ -331,7 +331,7 @@ public class BasicDirectoryModel extends AbstractListModel<Object> implements Pr
 
             newFileCache.addAll(newFiles);
 
-            // To avoid loads of synchronizations with Invoker and improve performance we
+            // To avoid loads of synchronizations with DefaultMethodInvoker and improve performance we
             // execute the whole block on the COM thread
             runnable = ShellFolder.invoke(new Callable<DoChangeContents>() {
                 public DoChangeContents call() {
