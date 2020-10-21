@@ -24,9 +24,12 @@
 package p;
 import java.lang.reflect.*;
 
-public class DefaultMethodInvoker {
-     public static Object invoke(Object proxy, Method method, Object... args)
-            throws IllegalAccessException, InvocationTargetException {
-         return InvocationHandler.invokeDefaultMethod(proxy, method, args);
-     }
+public class ProxyMaker {
+    public static Proxy create(InvocationHandler ih, Class<?>... intfs) {
+        return (Proxy) Proxy.newProxyInstance(ProxyMaker.class.getClassLoader(), intfs, ih);
+    }
+
+    public static InvocationHandler getInvocationHandler(Proxy proxy) {
+        return Proxy.getInvocationHandler(proxy);
+    }
 }

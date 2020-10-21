@@ -61,6 +61,7 @@ final class ProxyGenerator extends ClassWriter {
     private static final String JL_THROWABLE = "java/lang/Throwable";
     private static final String JL_CLASS_NOT_FOUND_EX = "java/lang/ClassNotFoundException";
     private static final String JL_ILLEGAL_ACCESS_EX = "java/lang/IllegalAccessException";
+    private static final String JL_ILLEGAL_ARGUMENT_EX = "java/lang/IllegalArgumentException";
 
     private static final String JL_NO_CLASS_DEF_FOUND_ERROR = "java/lang/NoClassDefFoundError";
     private static final String JL_NO_SUCH_METHOD_EX = "java/lang/NoSuchMethodException";
@@ -69,6 +70,7 @@ final class ProxyGenerator extends ClassWriter {
     private static final String JLI_METHODHANDLES = "java/lang/invoke/MethodHandles";
 
     private static final String JLR_INVOCATION_HANDLER = "java/lang/reflect/InvocationHandler";
+
     private static final String JLR_PROXY = "java/lang/reflect/Proxy";
     private static final String JLR_UNDECLARED_THROWABLE_EX = "java/lang/reflect/UndeclaredThrowableException";
 
@@ -76,11 +78,17 @@ final class ProxyGenerator extends ClassWriter {
     private static final String LJLR_METHOD = "Ljava/lang/reflect/Method;";
     private static final String LJLR_INVOCATION_HANDLER = "Ljava/lang/reflect/InvocationHandler;";
 
-    private static final String MJLR_INVOCATIONHANDLER = "(Ljava/lang/reflect/InvocationHandler;)V";
+    private static final String INIT_DESC_INVOCATIONHANDLER
+            = "(Ljava/lang/reflect/InvocationHandler;)V";
+    private static final String INIT_DESC_VOID_INVOCATIONHANDLER
+            = "(Ljava/lang/Void;Ljava/lang/reflect/InvocationHandler;)V";
+    private static final String CHECK_INVOCATION_HANDLER_DESC
+            = "(Ljava/lang/reflect/InvocationHandler;)Ljava/lang/Void;";
 
     private static final String NAME_CTOR = "<init>";
     private static final String NAME_CLINIT = "<clinit>";
     private static final String NAME_LOOKUP_ACCESSOR = "proxyClassLookup";
+    private static final String NAME_CHECK_INVOCATION_HANDLER = "checkInvocationHandler";
 
     private static final Class<?>[] EMPTY_CLASS_ARRAY = new Class<?>[0];
 
@@ -500,6 +508,7 @@ final class ProxyGenerator extends ClassWriter {
 
         generateStaticInitializer();
         generateLookupAccessor();
+        generateCheckInvocationHandler();
         return toByteArray();
     }
 
@@ -558,22 +567,73 @@ final class ProxyGenerator extends ClassWriter {
     }
 
     /**
-     * Generate the constructor method for the proxy class.
+     * Generate the constructor method for the proxy class:
+     *
+     * public $Proxy0(InvocationHandler h) {
+     *     this(checkInvocationHandler(h), h);
+     * }
+     *
+     * private $Proxy0(Void unused, InvocationHandler h) {
+     *     super(h);
+     * }
      */
     private void generateConstructor() {
         MethodVisitor ctor = visitMethod(Modifier.PUBLIC, NAME_CTOR,
-                MJLR_INVOCATIONHANDLER, null, null);
-        ctor.visitParameter(null, 0);
+                INIT_DESC_INVOCATIONHANDLER, null, null);
         ctor.visitCode();
         ctor.visitVarInsn(ALOAD, 0);
         ctor.visitVarInsn(ALOAD, 1);
-        ctor.visitMethodInsn(INVOKESPECIAL, JLR_PROXY, NAME_CTOR,
-                MJLR_INVOCATIONHANDLER, false);
+        ctor.visitMethodInsn(INVOKESTATIC, dotToSlash(className), NAME_CHECK_INVOCATION_HANDLER,
+                CHECK_INVOCATION_HANDLER_DESC, false);
+        ctor.visitVarInsn(ALOAD, 1);
+        ctor.visitMethodInsn(INVOKESPECIAL, dotToSlash(className), NAME_CTOR,
+                INIT_DESC_VOID_INVOCATIONHANDLER, false);
         ctor.visitInsn(RETURN);
 
         // Maxs computed by ClassWriter.COMPUTE_FRAMES, these arguments ignored
         ctor.visitMaxs(-1, -1);
         ctor.visitEnd();
+
+        // private constructor: <init>(Void, InvocationHandler)
+        MethodVisitor ctor2 = visitMethod(Modifier.PRIVATE, NAME_CTOR,
+                INIT_DESC_VOID_INVOCATIONHANDLER, null, null);
+        ctor2.visitCode();
+        ctor2.visitVarInsn(ALOAD, 0);
+        ctor2.visitVarInsn(ALOAD, 2);
+        ctor2.visitMethodInsn(INVOKESPECIAL, JLR_PROXY, NAME_CTOR,
+                INIT_DESC_INVOCATIONHANDLER, false);
+        ctor2.visitInsn(RETURN);
+        ctor2.visitMaxs(-1, -1);
+        ctor2.visitEnd();
+    }
+
+    /**
+     * Generate the static "checkInvocationHandler" method that throws IAE
+     * if the given invocation handler is a DelegatingInvocationHandler.
+     */
+    private void generateCheckInvocationHandler() {
+        MethodVisitor mv = visitMethod(Modifier.PRIVATE|Modifier.STATIC,
+                NAME_CHECK_INVOCATION_HANDLER, CHECK_INVOCATION_HANDLER_DESC, null, null);
+        Label L_return = new Label();
+
+        mv.visitCode();
+        mv.visitVarInsn(ALOAD, 0);
+        mv.visitTypeInsn(INSTANCEOF, Type.getInternalName(DelegatingInvocationHandler.class));
+        mv.visitJumpInsn(IFEQ, L_return);
+        mv.visitTypeInsn(Opcodes.NEW, JL_ILLEGAL_ARGUMENT_EX);
+        mv.visitInsn(DUP);
+        mv.visitLdcInsn("`h` is a DelegatingInvocationHandler");
+        mv.visitMethodInsn(INVOKESPECIAL, JL_ILLEGAL_ARGUMENT_EX,
+                "<init>", "(Ljava/lang/String;)V", false);
+        mv.visitInsn(ATHROW);
+
+        mv.visitLabel(L_return);
+        mv.visitInsn(ACONST_NULL);
+        mv.visitInsn(ARETURN);
+
+        // Maxs computed by ClassWriter.COMPUTE_FRAMES, these arguments ignored
+        mv.visitMaxs(-1, -1);
+        mv.visitEnd();
     }
 
     /**
@@ -633,7 +693,7 @@ final class ProxyGenerator extends ClassWriter {
 
     /**
      * Generate the static lookup accessor method that returns the Lookup
-     * on this proxy class if the caller's lookup class is java.lang.reflect.InvocationHandler;
+     * on this proxy class if the caller's lookup class is DelegatingInvocationHandler;
      * otherwise, IllegalAccessException is thrown
      */
     private void generateLookupAccessor() {
@@ -646,7 +706,8 @@ final class ProxyGenerator extends ClassWriter {
         mv.visitVarInsn(ALOAD, 0);
         mv.visitMethodInsn(INVOKEVIRTUAL, JLI_LOOKUP, "lookupClass",
                 "()Ljava/lang/Class;", false);
-        mv.visitLdcInsn(Type.getType(InvocationHandler.class));
+        mv.visitLdcInsn(Type.getType(DelegatingInvocationHandler.class));
+
         mv.visitJumpInsn(IF_ACMPNE, L_illegalAccess);
         mv.visitVarInsn(ALOAD, 0);
         mv.visitMethodInsn(INVOKEVIRTUAL, JLI_LOOKUP, "hasFullPrivilegeAccess",

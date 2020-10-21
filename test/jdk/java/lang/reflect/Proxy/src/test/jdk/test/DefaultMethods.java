@@ -23,6 +23,8 @@
 
 package jdk.test;
 
+import java.lang.reflect.DelegatingInvocationHandler;
+import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -35,8 +37,18 @@ import java.lang.reflect.UndeclaredThrowableException;
  */
 public class DefaultMethods {
     private final static Module TEST_MODULE = DefaultMethods.class.getModule();
-    private final static InvocationHandler IH = (proxy, method, params) -> {
-        return InvocationHandler.invokeDefaultMethod(proxy, method, params);
+    private final static TestInvocationHandler IH = new TestInvocationHandler();
+
+    static class TestInvocationHandler extends DelegatingInvocationHandler {
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] params) throws Throwable {
+            return invokeDefault(proxy, method, params);
+        }
+
+        // for testing purpose
+        public Object invokeDefaultMethod(Object proxy, Method method, Object[] params) throws InvocationTargetException {
+            return invokeDefault(proxy, method, params);
+        }
     };
 
     public static void main(String... args) throws Exception {
@@ -50,11 +62,9 @@ public class DefaultMethods {
         testDefaultMethod(new Class<?>[] { Class.forName("jdk.test.NP") }, 100);
 
         // inaccessible type - not exported to test module
-        Class<?> qType = Class.forName("p.three.internal.Q");
-        inaccessibleDefaultMethod(qType);
+        inaccessibleDefaultMethod(Class.forName("p.three.internal.Q"));
         // non-public interface in the same runtime package
-        Class<?> nonPublicType = Class.forName("jdk.test.internal.NP");
-        inaccessibleDefaultMethod(nonPublicType);
+        inaccessibleDefaultMethod(Class.forName("jdk.test.internal.NP"));
     }
 
     static void testDefaultMethod(Class<?>[] intfs, int expected) throws Exception {
@@ -69,29 +79,14 @@ public class DefaultMethods {
         }
     }
 
+    /*
+     * Proxy::newProxyInstance fails as the caller has no access on the proxy interfaces
+     */
     static void inaccessibleDefaultMethod(Class<?> intf) throws Exception {
-        Object proxy = Proxy.newProxyInstance(TEST_MODULE.getClassLoader(), new Class<?>[] { intf }, IH);
-        if (!proxy.getClass().getModule().isNamed()) {
-            throw new RuntimeException(proxy.getClass() + " expected to be in a named module");
-        }
-        Method m = intf.getMethod("m");
         try {
-            InvocationHandler.invokeDefaultMethod(proxy, m, null);
-            throw new RuntimeException("IAE not thrown invoking: " + m);
-        } catch (IllegalAccessException e) {}
-
-        if (m.trySetAccessible()) {
-            try {
-                m.invoke(proxy);
-                throw new RuntimeException("IAE not thrown invoking: " + m);
-            } catch (InvocationTargetException e) {
-                // IAE wrapped by InvocationHandler::invoke with UndeclaredThrowableException
-                // then wrapped by Method::invoke with InvocationTargetException
-                assert e.getCause() instanceof UndeclaredThrowableException;
-                Throwable cause = e.getCause().getCause();
-                if (!(cause instanceof IllegalAccessException))
-                    throw e;
-            }
+            Proxy.newProxyInstance(TEST_MODULE.getClassLoader(), new Class<?>[]{intf}, IH);
+            throw new RuntimeException("IAE not thrown");
+        } catch (InaccessibleObjectException e) {
         }
     }
 }

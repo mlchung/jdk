@@ -33,7 +33,7 @@ import static org.testng.Assert.*;
  * @test
  * @bug 8159746
  * @summary Test invoking a default method in a non-public proxy interface
- * @build p.Foo p.Bar p.DefaultMethodInvoker
+ * @build p.Foo p.Bar p.ProxyMaker
  * @run testng DefaultMethodProxy
  */
 public class DefaultMethodProxy {
@@ -42,16 +42,14 @@ public class DefaultMethodProxy {
     }
 
     @Test
-    public static void hasPackageAccess() throws Exception {
-        Class<?> fooClass = Class.forName("p.Foo");
-        Class<?> barClass = Class.forName("p.Bar");
-
-        // create a proxy instance of a non-public proxy interface
-        makeProxy(IH, fooClass).testDefaultMethod("foo");
-        makeProxy(IH, barClass, fooClass).testDefaultMethod("bar");
-
+    public static void publicInterface() throws Exception {
         // create a proxy instance of a public proxy interface should succeed
-        makeProxy(IH, I.class).testDefaultMethod("I");
+        Proxy proxy = (Proxy)Proxy.newProxyInstance(DefaultMethodProxy.class.getClassLoader(),
+                                              new Class<?>[] { I.class }, IH);
+
+        testDefaultMethod(proxy, "I");
+        // can get the invocation handler
+        assertTrue(Proxy.getInvocationHandler(proxy) == IH);
     }
 
     @DataProvider(name = "nonPublicIntfs")
@@ -59,26 +57,40 @@ public class DefaultMethodProxy {
         Class<?> fooClass = Class.forName("p.Foo");
         Class<?> barClass = Class.forName("p.Bar");
         return new Object[][]{
-                new Object[]{new Class<?>[]{ fooClass }},
-                new Object[]{new Class<?>[]{ barClass }},
-                new Object[]{new Class<?>[]{ barClass, fooClass }},
+                new Object[]{new Class<?>[]{ fooClass }, "foo"},
+                new Object[]{new Class<?>[]{ barClass }, "bar"},
+                new Object[]{new Class<?>[]{ barClass, fooClass}, "bar"},
         };
     }
 
     @Test(dataProvider = "nonPublicIntfs")
-    public static void noPackageAccess(Class<?>[] intfs) throws Exception {
-        makeProxy(IH_NO_ACCESS, intfs).testDefaultMethod("dummy");
+    public static void testNonPublicIntfs(Class<?>[] intfs, String expected) throws Exception {
+        // create a proxy instance of a non-public proxy interface
+        // via p.ProxyMaker which has the access to the proxy interface
+        Proxy proxy = p.ProxyMaker.create(IH, intfs);
+        // also access to the proxy
+        assertTrue(p.ProxyMaker.getInvocationHandler(proxy) == IH);
+
+        // invoke the default method
+        testDefaultMethod(proxy, expected);
+
+        try {
+            // this class has no access to the proxy
+            Proxy.getInvocationHandler(proxy);
+            assertTrue(false);
+        } catch (InaccessibleObjectException e) {}
     }
 
-    final Object proxy;
-    DefaultMethodProxy(Object proxy) {
-        this.proxy = proxy;
+    @Test(dataProvider = "nonPublicIntfs", expectedExceptions = { InaccessibleObjectException.class})
+    public static void noAccess(Class<?>[] intfs, String unused) throws Exception {
+        // this class has no access to non-public interface in another package
+        Proxy.newProxyInstance(DefaultMethodProxy.class.getClassLoader(), intfs, IH);
     }
 
     /*
      * Verify if a default method "m" can be invoked successfully
      */
-    void testDefaultMethod(String expected) throws ReflectiveOperationException {
+    static void testDefaultMethod(Proxy proxy, String expected) throws ReflectiveOperationException {
         Method m = proxy.getClass().getDeclaredMethod("m");
         m.setAccessible(true);
         String name = (String)m.invoke(proxy);
@@ -88,37 +100,17 @@ public class DefaultMethodProxy {
     }
 
     // invocation handler with access to the non-public interface in package p
-    private static final InvocationHandler IH = (proxy, method, params) -> {
-        System.out.format("Proxy for %s: invoking %s%n",
-                Arrays.stream(proxy.getClass().getInterfaces())
-                      .map(Class::getName)
-                      .collect(Collectors.joining(", ")), method.getName());
-        if (method.isDefault()) {
-            return p.DefaultMethodInvoker.invoke(proxy, method, params);
-        }
-        throw new UnsupportedOperationException(method.toString());
-    };
-
-    // invocation handler with no access to the non-public interface in package p
-    // expect IllegalAccessException thrown
-    private static final InvocationHandler IH_NO_ACCESS = (proxy, method, params) -> {
-        System.out.format("Proxy for %s: invoking %s%n",
-                Arrays.stream(proxy.getClass().getInterfaces())
-                        .map(Class::getName)
-                        .collect(Collectors.joining(", ")), method.getName());
-        if (method.isDefault()) {
-            try {
-                InvocationHandler.invokeDefaultMethod(proxy, method, params);
-                throw new RuntimeException("IAE not thrown in invoking: " + method);
-            } catch (IllegalAccessException e) {
-                return "dummy";
+    private static final DelegatingInvocationHandler IH = new DelegatingInvocationHandler() {
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] params) throws Throwable {
+            System.out.format("Proxy for %s: invoking %s%n",
+                    Arrays.stream(proxy.getClass().getInterfaces())
+                            .map(Class::getName)
+                            .collect(Collectors.joining(", ")), method.getName());
+            if (method.isDefault()) {
+                return invokeDefault(proxy, method, params);
             }
+            throw new UnsupportedOperationException(method.toString());
         }
-        throw new UnsupportedOperationException(method.toString());
     };
-
-    private static DefaultMethodProxy makeProxy(InvocationHandler ih, Class<?>... intfs) {
-        Object proxy = Proxy.newProxyInstance(DefaultMethodProxy.class.getClassLoader(), intfs, ih);
-        return new DefaultMethodProxy(proxy);
-    }
 }
