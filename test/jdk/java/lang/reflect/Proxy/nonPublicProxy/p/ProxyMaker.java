@@ -22,11 +22,17 @@
  */
 
 package p;
-import java.lang.reflect.*;
 
-public class DefaultMethodInvoker {
-     public static Object invoke(Object proxy, Method method, Object... args)
-            throws IllegalAccessException, InvocationTargetException {
-         return InvocationHandler.invokeDefaultMethod(proxy, method, args);
-     }
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.util.function.Function;
+
+public class ProxyMaker {
+    // proxy maker with access to the non-public interfaces in package p
+    public static Object makeProxy(
+        Function<? super InvocationHandler, ? extends InvocationHandler> handlerFactory,
+        Class<?>... intfs
+    ) throws IllegalAccessException {
+        return Proxy.newProxyInstance(ProxyMaker.class.getClassLoader(), intfs, handlerFactory);
+    }
 }
