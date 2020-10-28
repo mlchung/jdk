@@ -74,6 +74,9 @@ final class ProxyGenerator extends ClassWriter {
     private static final String JLR_UNDECLARED_THROWABLE_EX = "java/lang/reflect/UndeclaredThrowableException";
 
     private static final String LJL_CLASS = "Ljava/lang/Class;";
+    private static final String LJL_OBJECT = "Ljava/lang/Object;";
+    private static final String LJLI_LOOKUP = "Ljava/lang/invoke/MethodHandles$Lookup;";
+
     private static final String LJLR_METHOD = "Ljava/lang/reflect/Method;";
     private static final String LJLR_INVOCATION_HANDLER = "Ljava/lang/reflect/InvocationHandler;";
 
@@ -496,7 +499,7 @@ final class ProxyGenerator extends ClassWriter {
         for (List<ProxyMethod> sigmethods : proxyMethods.values()) {
             for (ProxyMethod pm : sigmethods) {
                 // add static field for the Method object
-                visitField(Modifier.PRIVATE | Modifier.STATIC, pm.methodFieldName,
+                visitField(ACC_PRIVATE|ACC_STATIC|ACC_FINAL, pm.methodFieldName,
                         LJLR_METHOD, null, null);
 
                 // Generate code for proxy method
@@ -667,15 +670,15 @@ final class ProxyGenerator extends ClassWriter {
      * otherwise, IllegalAccessException is thrown
      */
     private void generateLookupAccessor() {
-        MethodVisitor mv = visitMethod(ACC_PRIVATE | ACC_STATIC, NAME_LOOKUP_ACCESSOR,
-                "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/invoke/MethodHandles$Lookup;", null,
+        MethodVisitor mv = visitMethod(ACC_PRIVATE|ACC_STATIC, NAME_LOOKUP_ACCESSOR,
+                "(" + LJLI_LOOKUP + ")" + LJLI_LOOKUP, null,
                 new String[] { JL_ILLEGAL_ACCESS_EX });
         mv.visitCode();
         Label L_illegalAccess = new Label();
 
         mv.visitVarInsn(ALOAD, 0);
         mv.visitMethodInsn(INVOKEVIRTUAL, JLI_LOOKUP, "lookupClass",
-                "()Ljava/lang/Class;", false);
+                "()" + LJL_CLASS, false);
         mv.visitLdcInsn(Type.getType(Proxy.class));
 
         mv.visitJumpInsn(IF_ACMPNE, L_illegalAccess);
@@ -684,7 +687,7 @@ final class ProxyGenerator extends ClassWriter {
                 "()Z", false);
         mv.visitJumpInsn(IFEQ, L_illegalAccess);
         mv.visitMethodInsn(INVOKESTATIC, JLI_METHODHANDLES, "lookup",
-                "()Ljava/lang/invoke/MethodHandles$Lookup;", false);
+                "()" + LJLI_LOOKUP, false);
         mv.visitInsn(ARETURN);
 
         mv.visitLabel(L_illegalAccess);
@@ -802,8 +805,7 @@ final class ProxyGenerator extends ClassWriter {
 
             mv.visitMethodInsn(INVOKEINTERFACE, JLR_INVOCATION_HANDLER,
                     "invoke",
-                    "(Ljava/lang/Object;Ljava/lang/reflect/Method;" +
-                            "[Ljava/lang/Object;)Ljava/lang/Object;", true);
+                    "(" + LJL_OBJECT + LJLR_METHOD + "[" + LJL_OBJECT + ")" + LJL_OBJECT, true);
 
             if (returnType == void.class) {
                 mv.visitInsn(POP);

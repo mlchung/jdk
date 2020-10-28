@@ -50,12 +50,14 @@ import static java.lang.invoke.MethodType.methodType;
  * @since 16
  */
 final class SuperInvocationHandler implements InvocationHandler {
-    private final MethodHandles.Lookup lookup;
+    private final ConcurrentHashMap<Method, MethodHandle> defaultMethods = new ConcurrentHashMap<>();
+    private final MethodHandles.Lookup proxyLookup;
+
     /**
      * Creates a {@code SuperInvocationHandler}
      */
     SuperInvocationHandler(MethodHandles.Lookup lookup) {
-        this.lookup = lookup;
+        this.proxyLookup = lookup;
     }
 
     /**
@@ -68,95 +70,6 @@ final class SuperInvocationHandler implements InvocationHandler {
      * from the proxy class as the caller equivalent to the invocation of
      * {@code X.super.m(A* a)} where {@code X} is a proxy interface and
      * the call to {@code X.super::m(A*)} is resolved to the given {@code method}.
-     * <p>
-     * For example, interface {@code A} and {@code B} both declare a default
-     * implementation of method {@code m}. Interface {@code C} extends {@code A}
-     * and it inherits the default method {@code m} from its superinterface {@code A}.
-     *
-     * <blockquote><pre>{@code
-     * interface A {
-     *     default T m(A a) { return t1; }
-     * }
-     * interface B {
-     *     default T m(A a) { return t2; }
-     * }
-     * interface C extends A {}
-     * }</pre></blockquote>
-     *
-     * The following creates a proxy instance that implements {@code A}
-     * and invokes the default method {@code A::m}.
-     *
-     * <blockquote><pre>{@code
-     * Object proxy = Proxy.newProxyInstance(loader, new Class<?>[] { A.class },
-     *         (o, m, params) -> {
-     *             assert m.getDeclaringClass() == A.class && m.isDefault();
-     *             return InvocationHandler.invokeDefaultMethod(o, m, params);
-     *         });
-     * }</pre></blockquote>
-     *
-     * If a proxy instance implements both {@code A} and {@code B}, both
-     * of which provides the default implementation of method {@code m},
-     * the invocation handler can dispatch the method invocation to
-     * {@code A::m} or {@code B::m} via the {@code invokeDefaultMethod} method.
-     * For example, the following code delegates the method invocation
-     * to {@code B::m}.
-     *
-     * <blockquote><pre>{@code
-     * Object proxy = Proxy.newProxyInstance(loader, new Class<?>[] { A.class, B.class },
-     *         (o, m, params) -> {
-     *             // delegate to invoking B::m
-     *             Method selectedMethod = B.class.getMethod(m.getName(), m.getParameterTypes());
-     *             return InvocationHandler.invokeDefaultMethod(o, selectedMethod, params);
-     *         });
-     * }</pre></blockquote>
-     *
-     * If a proxy instance implements {@code C} that inherits the default
-     * method {@code m} from its superinterface {@code A}, then
-     * the interface method invocation on {@code "m"} is dispatched to
-     * the invocation handler's {@link #invoke(Object, Method, Object[]) invoke}
-     * method with the {@code Method} object argument representing the
-     * default method {@code A::m}.
-     *
-     * <blockquote><pre>{@code
-     * Object c = Proxy.newProxyInstance(loader, new Class<?>[] { C.class },
-     *        (o, m, params) -> {
-     *             assert m.isDefault();
-     *             return InvocationHandler.invokeDefaultMethod(o, m, params);
-     *        });
-     * }</pre></blockquote>
-     *
-     * The invocation of method {@code "m"} on {@code c} will behave as if
-     * {@code C.super::m} is called and that is resolved to invoking
-     * {@code A::m}.
-     * <p>
-     * If {@code C} is modified to override {@code m} as below:
-     *
-     * <blockquote><pre>{@code
-     * interface C extends A {
-     *     default T m(A a) { return t3; }
-     * }
-     * }</pre></blockquote>
-     *
-     * {@code C.super::m} will be resolved to {@code C::m} instead.
-     * The invocation of method {@code "m"} on {@code c} will behave
-     * differently and result in invoking {@code C::m} instead of {@code A::m}.
-     * <p>
-     * If an invocation handler dispatches the method invocation by calling
-     * the {@code invokeDefaultMethod} method with the {@code Method} object
-     * representing {@code A::m}:
-     *
-     * <blockquote><pre>{@code
-     * Object proxy = Proxy.newProxyInstance(loader, new Class<?>[] { C.class },
-     *         (o, m, params) -> {
-     *             // IllegalArgumentException thrown as {@code A::m} is not a method
-     *             // inherited from its proxy interface C
-     *             return InvocationHandler.invokeDefaultMethod(o, A.class.getMethod("m"), params);
-     *         });
-     * }</pre></blockquote>
-     *
-     * The invocation on {@code "m"} with this proxy instance will result in
-     * an {@code IllegalArgumentException} because {@code C} overrides the implementation
-     * of the same method and {@code A::m} is not accessible by a proxy instance.
      *
      * @param proxy   the {@code Proxy} instance on which the default method to be invoked
      * @param method  the {@code Method} instance corresponding to a default method
@@ -168,8 +81,8 @@ final class SuperInvocationHandler implements InvocationHandler {
      *
      * @throws IllegalArgumentException if any of the following conditions is {@code true}:
      *         <ul>
-     *         <li>{@code proxy} is not {@linkplain Proxy#isProxyClass(Class)
-     *             a proxy instance}; or</li>
+     *         <li>{@code proxy} is not an instance of the proxy class handled by
+     *             the default-method invocation handler; or</li>
      *         <li>the given {@code method} is not a default method declared
      *             in a proxy interface of the proxy class and not inherited from
      *             any of its superinterfaces; or</li>
@@ -196,24 +109,22 @@ final class SuperInvocationHandler implements InvocationHandler {
 
         // verify that the object is actually a proxy instance
         Class<?> proxyClass = proxy.getClass();
-        if (proxyClass != lookup.lookupClass()) {
-            throw new IllegalArgumentException("'proxy' is not the proxy instance of " + lookup.lookupClass().getName());
+        if (proxyClass != proxyLookup.lookupClass()) {
+            throw new IllegalArgumentException("'proxy' is not the proxy instance of " + proxyLookup.lookupClass().getName());
         }
         if (!method.isDefault()) {
             throw new IllegalArgumentException("\"" + method + "\" is not a default method");
         }
 
         // lookup the cached method handle
-        ConcurrentHashMap<Method, MethodHandle> methods = defaultMethodMap(proxyClass);
-        MethodHandle superMH = methods.get(method);
-
+        MethodHandle superMH = defaultMethods.get(method);
         if (superMH == null) {
             MethodType type = methodType(method.getReturnType(), method.getParameterTypes());
             Class<?> proxyInterface = findProxyInterfaceOrElseThrow(proxyClass, method);
             MethodHandle dmh;
             try {
-                dmh = lookup.findSpecial(proxyInterface, method.getName(), type, proxyClass)
-                            .withVarargs(false);
+                dmh = proxyLookup.findSpecial(proxyInterface, method.getName(), type, proxyClass)
+                                 .withVarargs(false);
             } catch (IllegalAccessException | NoSuchMethodException e) {
                 // should not reach here
                 throw new InternalError(e);
@@ -232,15 +143,17 @@ final class SuperInvocationHandler implements InvocationHandler {
             }).getAsBoolean() : "Wrong method type";
             // change return type to Object
             MethodHandle mh = dmh.asType(dmh.type().changeReturnType(Object.class));
-            // wrap any exception thrown with InvocationTargetException
-            mh = MethodHandles.catchException(mh, Throwable.class, wrapWithInvocationTargetExceptionMH());
+            // wrap any exception thrown with InvocationException that is used to distinguish
+            // CCE and NPE thrown by the default method body vs
+            // CCE and NPE thrown due to the arguments incompatible with the method signature
+            mh = MethodHandles.catchException(mh, Throwable.class, wrapWithInvocationExceptionMH());
             // spread array of arguments among parameters (skipping 1st parameter - target)
             mh = mh.asSpreader(1, Object[].class, type.parameterCount());
             // change target type to Object
             mh = mh.asType(MethodType.methodType(Object.class, Object.class, Object[].class));
 
             // push MH into cache
-            MethodHandle cached = methods.putIfAbsent(method, mh);
+            MethodHandle cached = defaultMethods.putIfAbsent(method, mh);
             if (cached != null) {
                 superMH = cached;
             } else {
@@ -256,28 +169,11 @@ final class SuperInvocationHandler implements InvocationHandler {
             return superMH.invokeExact(proxy, params);
         } catch (ClassCastException | NullPointerException e) {
             throw new IllegalArgumentException(e.getMessage(), e);
-        } catch (InvocationTargetException | RuntimeException | Error e) {
+        } catch (InvocationException e) {
+            throw e.getCause();
+        } catch (RuntimeException | Error e) {
             throw e;
-        } catch (Throwable e) {
-            // should not reach here
-            throw new InternalError(e);
         }
-    }
-
-    /**
-     * A cache of Method -> MethodHandle for default methods.
-     */
-    private static final ClassValue<ConcurrentHashMap<Method, MethodHandle>>
-            DEFAULT_METHODS_MAP = new ClassValue<>() {
-        @Override
-        protected ConcurrentHashMap<Method, MethodHandle> computeValue(Class<?> type) {
-            return new ConcurrentHashMap<>(4);
-        }
-    };
-
-    static ConcurrentHashMap<Method, MethodHandle> defaultMethodMap(Class<?> proxyClass) {
-        assert Proxy.isProxyClass(proxyClass);
-        return DEFAULT_METHODS_MAP.get(proxyClass);
     }
 
     /**
@@ -346,24 +242,37 @@ final class SuperInvocationHandler implements InvocationHandler {
     }
 
     /**
-     * Wraps given cause with InvocationTargetException and throws it.
+     * Internal exception type to wrap the exception thrown by the default method
+     * so that it can distinguish CCE and NPE thrown due to the arguments
+     * incompatible with the method signature.
+     */
+    private static class InvocationException extends ReflectiveOperationException {
+        @java.io.Serial
+        private static final long serialVersionUID = 0L;
+        InvocationException(Throwable cause) {
+            super(cause);
+        }
+    }
+
+    /**
+     * Wraps given cause with InvocationException and throws it.
      *
      * @throws InvocationTargetException wrapping given cause
      */
-    private static Object wrapWithInvocationTargetException(Throwable cause) throws InvocationTargetException {
-        throw new InvocationTargetException(cause, cause.toString());
+    private static Object wrapWithInvocationException(Throwable cause) throws InvocationException {
+        throw new InvocationException(cause);
     }
 
     @Stable
-    private static MethodHandle wrapWithInvocationTargetExceptionMH;
+    private static MethodHandle wrapWithInvocationExceptionMH;
 
-    static MethodHandle wrapWithInvocationTargetExceptionMH() {
-        MethodHandle mh = wrapWithInvocationTargetExceptionMH;
+    private static MethodHandle wrapWithInvocationExceptionMH() {
+        MethodHandle mh = wrapWithInvocationExceptionMH;
         if (mh == null) {
             try {
-                wrapWithInvocationTargetExceptionMH = mh = MethodHandles.lookup().findStatic(
+                wrapWithInvocationExceptionMH = mh = MethodHandles.lookup().findStatic(
                         SuperInvocationHandler.class,
-                        "wrapWithInvocationTargetException",
+                        "wrapWithInvocationException",
                         MethodType.methodType(Object.class, Throwable.class)
                 );
             } catch (NoSuchMethodException | IllegalAccessException e) {

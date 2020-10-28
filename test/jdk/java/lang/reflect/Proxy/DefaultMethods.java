@@ -229,7 +229,7 @@ public class DefaultMethods {
     // invoke I12 default methods with parameters and var args
     @Test
     public void testI12() throws Throwable {
-        final Function<InvocationHandler, InvocationHandler> ihf = superHandler -> (proxy, method, params) -> {
+        Function<InvocationHandler, InvocationHandler> ihf = superHandler -> (proxy, method, params) -> {
             System.out.format("invoking %s with parameters: %s%n", method, Arrays.toString(params));
             switch (method.getName()) {
                 case "sum":
@@ -361,8 +361,8 @@ public class DefaultMethods {
         superHandler.invoke(proxy, m, args);
     }
 
-    @DataProvider(name = "invocationTargetExceptions")
-    private Object[][] invocationTargetExceptions() {
+    @DataProvider(name = "throwables")
+    private Object[][] throwables() {
         return new Object[][]{
             new Object[]{new IOException()},
             new Object[]{new IllegalArgumentException()},
@@ -373,17 +373,16 @@ public class DefaultMethods {
         };
     }
 
-    @Test(dataProvider = "invocationTargetExceptions", expectedExceptions = InvocationTargetException.class)
-    public void testInvocationTargetException(Throwable exception) throws Throwable {
+    @Test(dataProvider = "throwables")
+    public void testThrowable(Throwable exception) throws Throwable {
         ClassLoader loader = DefaultMethods.class.getClassLoader();
         IX proxy = (IX) Proxy.newProxyInstance(loader, new Class<?>[]{IX.class}, HANDLER_FACTORY);
         InvocationHandler superHandler = getSuperHandler(proxy);
         Method m = IX.class.getMethod("doThrow", Throwable.class);
         try {
             superHandler.invoke(proxy, m, new Object[]{exception});
-        } catch (InvocationTargetException e) {
-            assertEquals(e.getCause(), exception);
-            throw e;
+        } catch (Throwable e) {
+            assertEquals(e, exception);
         }
     }
 
@@ -403,18 +402,6 @@ public class DefaultMethods {
         } catch (Exception e) {
             throw new AssertionError("Can't get super handler", e);
         }
-    }
-
-    private static Object getDefault(Class<?> type) {
-        if (type == boolean.class) return false;
-        if (type == byte.class) return (byte) 0;
-        if (type == short.class) return (short) 0;
-        if (type == char.class) return (char) 0;
-        if (type == int.class) return (int) 0;
-        if (type == long.class) return (long) 0;
-        if (type == float.class) return (float) 0;
-        if (type == double.class) return (double) 0;
-        return null;
     }
 
     private static final Function<InvocationHandler, InvocationHandler> HANDLER_FACTORY =

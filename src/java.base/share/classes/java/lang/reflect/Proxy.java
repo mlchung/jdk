@@ -165,12 +165,16 @@ import static java.lang.module.ModuleDescriptor.Modifier.SYNTHETIC;
  *
  * <h2><a id="default-methods">Default Methods</a></h2>
  *
- * A {@linkplain DelegatingInvocationHandler delegating invocation handler}
- * supports the invocation of default methods of a proxy instance.
- * Access checks are performed in the factory method
- * {@link #newProxyInstance(ClassLoader, Class[], InvocationHandler)
- * Proxy::newProxyInstance} when a proxy is created and
- * {@code newProxyInstance} is called with a delegating invocation handler.
+ * The {@link #newProxyInstance(ClassLoader, Class[], Function)} factory
+ * method can be used to create a proxy instance that supports the invocation
+ * of default methods via a special <i>default-method invocation handler</i>.
+ * The handler factory function is invoked with the default-method
+ * invocation handler for a proxy class through which an invocation handler
+ * can invoke default methods of the proxy class.
+ * <p>
+ * Access checks are performed at proxy creation time when the
+ * {@link #newProxyInstance(ClassLoader, Class[], Function)} factory method
+ * is called.
  *
  * <h2><a id="membership">Package and Module Membership of Proxy Class</a></h2>
  *
@@ -1035,15 +1039,23 @@ public class Proxy implements java.io.Serializable {
         Constructor<?> cons = getProxyConstructor(callerLoader, loader, interfaces.clone());
         return newProxyInstance(caller, cons, h, null);
     }
+
     /**
-     * Like {@linkplain #newProxyInstance(ClassLoader, Class[], InvocationHandler)}
-     * but instead of taking an instance of {@linkplain InvocationHandler}, this
-     * method takes a {@code handlerFactory} {@linkplain Function} which is invoked
-     * immediately with a special super-default-methods {@code InvocationHandler}
-     * instance which may in turn be used by to forward invocations to proxy
-     * interfaces' super default methods. For example:
+     * Returns a proxy instance for the specified interfaces that dispatches
+     * method invocations to the invocation handler produced by the specified
+     * handler factory. The {@code handlerFactory} {@linkplain Function function}
+     * is invoked with a <i>default-method invocation handler</i> through which
+     * the proxy's invocation handler can invoke a default method defined
+     * directly or indirectly in the specified proxy interfaces.
+     *
+     * <p>
+     * For example, the following code shows a handler factory that creates
+     * an invocation handler that will forward a method invocation
+     * to the default-method invocation handler if the given {@code method}
+     * is a default method.
+     *
      * <pre>{@code
-     * Proxy.newProxyInstance(cl, interfaces, superHandler -> (proxy, method, args) -> {
+     * Proxy.newProxyInstance(loader, interfaces, superHandler -> (proxy, method, args) -> {
      *     if (method.isDefault()) {
      *         return superHandler.invoke(proxy, method, args);
      *     } else {
@@ -1051,22 +1063,147 @@ public class Proxy implements java.io.Serializable {
      *     }
      * });
      * }</pre>
+     *
+     * <p>
      * Unlike {@linkplain #newProxyInstance(ClassLoader, Class[], InvocationHandler)},
-     * this method also checks the caller's access to specified proxy interfaces and
-     * throws {@linkplain IllegalAccessException} unless it has access.<p>
-     * Any exception thrown by given {@code handlerFactory} is propagated out of
-     * this method.
+     * this method checks if the caller has access to specified proxy interfaces and
+     * throws {@linkplain IllegalAccessException} if access denied.
+     *
+     * <h2>Default-method invocation handler</h2>
+     *
+     * The default-method invocation handler's
+     * {@link InvocationHandler#invoke(Object, Method, Object[]) invoke(proxy, method, args)}
+     * method invokes a default method on the given proxy instance with the given parameters.
+     * The given {@code method} must be a default method
+     * declared in a proxy interface of the {@code proxy}'s class or inherited
+     * from its superinterface directly or indirectly.
+     * <p>
+     * The {@link InvocationHandler#invoke(Object, Method, Object[]) invoke}
+     * method of the default-method invocation handler for a proxy class {@code Z}
+     * behaves as if called from an {@code invokespecial} instruction from {@code Z}
+     * as the caller invoking {@code X.super.m(A* a)} where {@code X} is a proxy interface
+     * and the call to {@code X.super::m(A*)} is resolved to the given {@code method}.
+     * <p>
+     * If {@code proxy} or {@code method} is {@code null}, then
+     * {@code NullPointerException} will be thrown.
+     * If any of the following conditions is {@code true}, then
+     * {@code IllegalArgumentException} will be thrown.
+     * <ul>
+     * <li>the given {@code proxy} is not an instance of the proxy class
+     *     handled by the default-method invocation handler; or</li>
+     * <li>the given {@code method} is not a default method declared
+     *     in a proxy interface of the proxy class and not inherited from
+     *     any of its superinterfaces; or</li>
+     * <li>the given {@code method} is overridden directly or indirectly by
+     *     the proxy interfaces and the method reference to the named
+     *     method never resolves to the given {@code method}; or</li>
+     * <li>the length of the given {@code args} array does not match the
+     *     number of parameters of the method to be invoked; or</li>
+     * <li>any of the {@code args} elements fails the unboxing
+     *     conversion if the corresponding method parameter type is
+     *     a primitive type; or if, after possible unboxing, any of the
+     *     {@code args} elements cannot be assigned to the corresponding
+     *     method parameter type.</li>
+     * </ul>
+     *
+     * <p>
+     * For example, interface {@code A} and {@code B} both declare a default
+     * implementation of method {@code m}. Interface {@code C} extends {@code A}
+     * and it inherits the default method {@code m} from its superinterface {@code A}.
+     *
+     * <blockquote><pre>{@code
+     * interface A {
+     *     default T m(A a) { return t1; }
+     * }
+     * interface B {
+     *     default T m(A a) { return t2; }
+     * }
+     * interface C extends A {}
+     * }</pre></blockquote>
+     *
+     * The following creates a proxy instance that implements {@code A}
+     * and invokes the default method {@code A::m}.
+     *
+     * <blockquote><pre>{@code
+     * Object proxy = Proxy.newProxyInstance(loader, new Class<?>[] { A.class },
+     *         superHandler -> (o, m, params) -> {
+     *             assert m.getDeclaringClass() == A.class && m.isDefault();
+     *             return superHandler.invoke(o, m, params);
+     *         });
+     * }</pre></blockquote>
+     *
+     * If a proxy instance implements both {@code A} and {@code B}, both
+     * of which provides the default implementation of method {@code m},
+     * the invocation handler can dispatch the method invocation to
+     * {@code A::m} or {@code B::m} via the {@code invokeDefaultMethod} method.
+     * For example, the following code delegates the method invocation
+     * to {@code B::m}.
+     *
+     * <blockquote><pre>{@code
+     * Object proxy = Proxy.newProxyInstance(loader, new Class<?>[] { A.class, B.class },
+     *         superHandler -> (o, m, params) -> {
+     *             // delegate to invoking B::m
+     *             Method selectedMethod = B.class.getMethod(m.getName(), m.getParameterTypes());
+     *             return superHandler.invoke(o, selectedMethod, params);
+     *         });
+     * }</pre></blockquote>
+     *
+     * If a proxy instance implements {@code C} that inherits the default
+     * method {@code m} from its superinterface {@code A}, then
+     * the interface method invocation on {@code "m"} is dispatched to
+     * the invocation handler's {@link InvocationHandler#invoke(Object, Method, Object[]) invoke}
+     * method with the {@code Method} object argument representing the
+     * default method {@code A::m}.
+     *
+     * <blockquote><pre>{@code
+     * Object c = Proxy.newProxyInstance(loader, new Class<?>[] { C.class },
+     *        superHandler -> (o, m, params) -> {
+     *             assert m.isDefault();
+     *             return superHandler.invoke(o, m, params);
+     *        });
+     * }</pre></blockquote>
+     *
+     * The invocation of method {@code "m"} on {@code c} will behave as if
+     * {@code C.super::m} is called and that is resolved to invoking
+     * {@code A::m}.
+     * <p>
+     * If {@code C} is modified to override {@code m} as below:
+     *
+     * <blockquote><pre>{@code
+     * interface C extends A {
+     *     default T m(A a) { return t3; }
+     * }
+     * }</pre></blockquote>
+     *
+     * {@code C.super::m} will be resolved to {@code C::m} instead.
+     * The invocation of method {@code "m"} on {@code c} will behave
+     * differently and result in invoking {@code C::m} instead of {@code A::m}.
+     * <p>
+     * If an invocation handler dispatches the method invocation by calling
+     * the {@code invokeDefaultMethod} method with the {@code Method} object
+     * representing {@code A::m}:
+     *
+     * <blockquote><pre>{@code
+     * Object proxy = Proxy.newProxyInstance(loader, new Class<?>[] { C.class },
+     *         superHandler -> (o, m, params) -> {
+     *             // IllegalArgumentException thrown as {@code A::m} is not a method
+     *             // inherited from its proxy interface C
+     *             return superHandler.invoke(o, A.class.getMethod("m"), params);
+     *         });
+     * }</pre></blockquote>
+     *
+     * The invocation on {@code "m"} with this proxy instance will result in
+     * an {@code IllegalArgumentException} because {@code C} overrides the implementation
+     * of the same method and {@code A::m} is not accessible by a proxy instance.
      *
      * @param   loader the class loader to define the proxy class
      * @param   interfaces the list of interfaces for the proxy class
      *          to implement
-     * @param   handlerFactory an invocation handler factory function called immediately
-     *                         with a special super-default-methods invocation handler
-     *                         which may be used by returned invocation handler
-     *                         to dispatch method invocations to proxy interfaces'
-     *                         super default methods.
-     * @return  a proxy instance with the specified invocation handler of a
-     *          proxy class that is defined by the specified class loader
+     * @param   handlerFactory an invocation handler factory function that produces
+     *          an invocation handler for the created proxy instance
+     * @return  a proxy instance of a proxy class that is associated with
+     *          the invocation handler produced by the specified handler factory
+     *          and the proxy class is defined by the specified class loader
      *          and that implements the specified interfaces
      * @throws  IllegalArgumentException if any of the <a href="#restrictions">
      *          restrictions</a> on the parameters are violated
@@ -1095,11 +1232,12 @@ public class Proxy implements java.io.Serializable {
      *          of the proxy interfaces
      * @throws  NullPointerException if the {@code interfaces} array
      *          argument or any of its elements are {@code null}, or
-     *          if the invocation handler, {@code h}, is
-     *          {@code null}
+     *          if {@code handlerFactory} is {@code null}
+     * @throws RuntimeException or Error if the {@code handleFactory} does so
      *
      * @see #newProxyInstance(ClassLoader, Class[], InvocationHandler)
      * @since 16
+     * @jvms 5.4.3. Method Resolution
      */
     @CallerSensitive
     public static Object newProxyInstance(ClassLoader loader,
@@ -1245,22 +1383,24 @@ public class Proxy implements java.io.Serializable {
             throw new IllegalArgumentException("not a proxy instance");
         }
 
-        final Proxy p = (Proxy) proxy;
-        final InvocationHandler ih = p.h;
-        if (superHandler(proxy) != null) {
-            try {
-                checkDefaultMethodAccess(Reflection.getCallerClass(), p.getClass().getInterfaces());
-            } catch (IllegalAccessException e) {
-                // what exception should this throw?
-                throw new IllegalCallerException(e);
-            }
-        }
-        if (System.getSecurityManager() != null) {
-            Class<?> ihClass = ih.getClass();
+        Proxy p = (Proxy) proxy;
+        InvocationHandler ih = p.h;
+        boolean hasSuperHandler = hasSuperHandler(proxy);
+        if (hasSuperHandler || System.getSecurityManager() != null) {
             Class<?> caller = Reflection.getCallerClass();
-            if (ReflectUtil.needsPackageAccessCheck(caller.getClassLoader(),
-                                                    ihClass.getClassLoader()))
-            {
+            if (hasSuperHandler) {
+                try {
+                    checkDefaultMethodAccess(caller, p.getClass().getInterfaces());
+                } catch (IllegalAccessException e) {
+                    // what exception should this throw?
+                    throw new IllegalCallerException(e);
+                }
+            }
+            // security permission check
+            Class<?> ihClass = ih.getClass();
+            if (System.getSecurityManager() != null &&
+                    ReflectUtil.needsPackageAccessCheck(caller.getClassLoader(),
+                                                        ihClass.getClassLoader())) {
                 ReflectUtil.checkPackageAccess(ihClass);
             }
         }
@@ -1290,7 +1430,7 @@ public class Proxy implements java.io.Serializable {
         return AccessController.doPrivileged(pa);
     }
 
-    private static InvocationHandler superHandler(Object proxy) {
+    private static boolean hasSuperHandler(Object proxy) {
         PrivilegedAction<InvocationHandler> pa = () ->  {
             try {
                 Field f = proxy.getClass().getDeclaredField("superHandler");
@@ -1300,6 +1440,6 @@ public class Proxy implements java.io.Serializable {
                 throw new InternalError(e);
             }
         };
-        return AccessController.doPrivileged(pa);
+        return AccessController.doPrivileged(pa) != null;
     }
 }
