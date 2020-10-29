@@ -30,7 +30,6 @@ import static org.testng.Assert.assertTrue;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Arrays;
@@ -112,7 +111,7 @@ public class DefaultMethods {
     }
 
     @Test
-    public void test() throws IllegalAccessException {
+    public void test() {
         ClassLoader loader = DefaultMethods.class.getClassLoader();
         Object proxy = Proxy.newProxyInstance(
             loader, new Class<?>[]{I1.class, I2.class},

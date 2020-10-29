@@ -23,6 +23,7 @@
 
 package jdk.test;
 
+import java.lang.reflect.InaccessibleInvocationHandlerException;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -66,10 +67,10 @@ public class DefaultMethods {
         }
     }
 
-    static void inaccessibleDefaultMethod(Class<?> intf) throws Exception {
+    static void inaccessibleDefaultMethod(Class<?> intf) {
         try {
             Proxy.newProxyInstance(TEST_MODULE.getClassLoader(), new Class<?>[]{intf}, IHF);
             throw new RuntimeException("IAE not thrown creating proxy implementing " + intf);
-        } catch (IllegalAccessException e) {}
+        } catch (InaccessibleInvocationHandlerException e) {}
     }
 }

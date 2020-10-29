@@ -21,18 +21,20 @@
  * questions.
  */
 
-import org.testng.annotations.DataProvider;
-import org.testng.annotations.Test;
-import p.ProxyMaker;
-
+import java.lang.reflect.InaccessibleInvocationHandlerException;
 import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Arrays;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import p.ProxyMaker;
+
+import org.testng.annotations.DataProvider;
+import org.testng.annotations.Test;
+import static org.testng.Assert.*;
 
 /*
  * @test
@@ -42,9 +44,23 @@ import java.util.stream.Stream;
  * @run testng DefaultMethodProxy
  */
 public class DefaultMethodProxy {
-
+    public interface I {
+        default String m() { return "I"; }
+    }
     public interface Baz {
         default String baz() { return "baz"; }
+    }
+
+    @Test
+    public static void publicInterface() throws Exception {
+        // create a proxy instance of a public proxy interface should succeed
+        Object proxy = Proxy.newProxyInstance(DefaultMethodProxy.class.getClassLoader(),
+                                              new Class<?>[] { I.class },
+                                              IHF);
+        new DefaultMethodProxy(proxy).testDefaultMethod("I");
+
+        // can get the invocation handler
+        assertTrue(Proxy.getInvocationHandler(proxy) != null);
     }
 
     @DataProvider(name = "inaccessibleIntfcs")
@@ -62,12 +78,23 @@ public class DefaultMethodProxy {
 
     @Test(dataProvider = "inaccessibleIntfcs")
     public static void hasPackageAccess(Class<?>[] intfs) throws ReflectiveOperationException {
-        new DefaultMethodProxy(ProxyMaker.makeProxy(IHF, intfs)).testDefaultMethod("foo", "bar");
+        Object proxy = ProxyMaker.makeProxy(IHF, intfs);
+        // verify access to the proxy's invocation handler
+        assertTrue(ProxyMaker.getInvocationHandler(proxy) != null);
+
+        new DefaultMethodProxy(proxy).testDefaultMethod("foo", "bar");
+
+        try {
+            // this class has no access to the proxy's invocation handler
+            Proxy.getInvocationHandler(proxy);
+            assertTrue(false, "InaccessibleInvocationHandlerException not thrown");
+        } catch (InaccessibleInvocationHandlerException e) {}
     }
 
-    @Test(dataProvider = "inaccessibleIntfcs", expectedExceptions = IllegalAccessException.class)
-    public static void noPackageAccess(Class<?>[] intfs) throws IllegalAccessException {
-        makeProxy(IHF, intfs);
+    @Test(dataProvider = "inaccessibleIntfcs", expectedExceptions = InaccessibleInvocationHandlerException.class)
+    public static void noPackageAccess(Class<?>[] intfs) {
+        // proxy maker with no access to the non-public interface in package p
+        Proxy.newProxyInstance(ProxyMaker.class.getClassLoader(), intfs, IHF);
     }
 
     final Object proxy;
@@ -78,7 +105,7 @@ public class DefaultMethodProxy {
     /*
      * Verify if a default method "m" can be invoked successfully
      */
-    void testDefaultMethod(String ... expected) throws ReflectiveOperationException {
+    void testDefaultMethod(String... expected) throws ReflectiveOperationException {
         Method m = proxy.getClass().getDeclaredMethod("m");
         m.setAccessible(true);
         String name = (String)m.invoke(proxy);
@@ -90,26 +117,14 @@ public class DefaultMethodProxy {
     // invocation handler factory that creates handlers that forward invocations to super default methods
     private static final Function<InvocationHandler, InvocationHandler> IHF =
         superHandler -> (proxy, method, params) -> {
-            System.out.format("Proxy for %s: invoking %s%n",
-                              Arrays.stream(proxy.getClass().getInterfaces())
-                                    .map(Class::getName)
-                                    .collect(Collectors.joining(", ")), method.getName());
-            if (method.isDefault()) {
-                try {
+                System.out.format("Proxy for %s: invoking %s%n",
+                                  Arrays.stream(proxy.getClass().getInterfaces())
+                                        .map(Class::getName)
+                                        .collect(Collectors.joining(", ")), method.getName());
+                if (method.isDefault()) {
                     return superHandler.invoke(proxy, method, params);
-                } catch (InvocationTargetException e) {
-                    throw e.getTargetException();
                 }
-            }
-            throw new UnsupportedOperationException(method.toString());
+                throw new UnsupportedOperationException(method.toString());
         };
-
-    // proxy maker with no access to the non-public interface in package p
-    // expect IllegalAccessException thrown
-    private static Object makeProxy(Function<? super InvocationHandler, ? extends InvocationHandler> handlerFactory,
-                                    Class<?>... intfs
-    ) throws IllegalAccessException {
-        return Proxy.newProxyInstance(ProxyMaker.class.getClassLoader(), intfs, handlerFactory);
-    }
 
 }

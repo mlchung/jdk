@@ -29,10 +29,13 @@ import java.util.function.Function;
 
 public class ProxyMaker {
     // proxy maker with access to the non-public interfaces in package p
-    public static Object makeProxy(
-        Function<? super InvocationHandler, ? extends InvocationHandler> handlerFactory,
-        Class<?>... intfs
-    ) throws IllegalAccessException {
+    public static Object makeProxy(Function<? super InvocationHandler,
+                                            ? extends InvocationHandler> handlerFactory,
+                                   Class<?>... intfs) {
         return Proxy.newProxyInstance(ProxyMaker.class.getClassLoader(), intfs, handlerFactory);
+    }
+    // get the invocation handler associated with the proxy
+    public static InvocationHandler getInvocationHandler(Object proxy) {
+        return Proxy.getInvocationHandler(proxy);
     }
 }

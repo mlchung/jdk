@@ -346,17 +346,11 @@ public class Reflection {
     }
 
     /**
-     * Returns an IllegalAccessException with an exception message based on
-     * the access that is denied.
+     * Returns an exception message based on the access that is denied.
      */
-    public static IllegalAccessException newIllegalAccessException(Class<?> currentClass,
-                                                                   Class<?> memberClass,
-                                                                   Class<?> targetClass,
-                                                                   int modifiers)
-    {
-        if (currentClass == null)
-            return newIllegalAccessException(memberClass, modifiers);
-
+    public static String illegalAccessMessage(Class<?> currentClass,
+                                              Class<?> memberClass,
+                                              int modifiers) {
         String currentSuffix = "";
         String memberSuffix = "";
         Module m1 = currentClass.getModule();
@@ -378,11 +372,25 @@ public class Reflection {
         } else {
             // module access failed
             msg += memberClass + memberSuffix+ " because "
-                   + m2 + " does not export " + memberPackageName;
+                    + m2 + " does not export " + memberPackageName;
             if (m2.isNamed()) msg += " to " + m1;
         }
+        return msg;
+    }
 
-        return new IllegalAccessException(msg);
+    /**
+     * Returns an IllegalAccessException with an exception message based on
+     * the access that is denied.
+     */
+    public static IllegalAccessException newIllegalAccessException(Class<?> currentClass,
+                                                                   Class<?> memberClass,
+                                                                   Class<?> targetClass,
+                                                                   int modifiers)
+    {
+        if (currentClass == null)
+            return newIllegalAccessException(memberClass, modifiers);
+
+        return new IllegalAccessException(illegalAccessMessage(currentClass, memberClass, modifiers));
     }
 
     /**

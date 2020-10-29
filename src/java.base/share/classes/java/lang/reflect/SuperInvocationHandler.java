@@ -102,15 +102,16 @@ final class SuperInvocationHandler implements InvocationHandler {
      * @since 16
      * @jvms 5.4.3. Method Resolution
      */
-    public final Object invoke(Object proxy, Method method, Object[] args)
-            throws Throwable {
+    public final Object invoke(Object proxy, Method method, Object[] args) throws Throwable
+    {
         Objects.requireNonNull(proxy);
         Objects.requireNonNull(method);
 
         // verify that the object is actually a proxy instance
         Class<?> proxyClass = proxy.getClass();
         if (proxyClass != proxyLookup.lookupClass()) {
-            throw new IllegalArgumentException("'proxy' is not the proxy instance of " + proxyLookup.lookupClass().getName());
+            throw new IllegalArgumentException("'proxy' is not the proxy instance of "
+                    + proxyLookup.lookupClass().getName());
         }
         if (!method.isDefault()) {
             throw new IllegalArgumentException("\"" + method + "\" is not a default method");

@@ -88,7 +88,7 @@ final class ProxyGenerator extends ClassWriter {
     private static final String NAME_CTOR = "<init>";
     private static final String NAME_CLINIT = "<clinit>";
     private static final String NAME_LOOKUP_ACCESSOR = "proxyClassLookup";
-    private static final String NAME_SUPER_HANDLER = "superHandler";
+    private static final String NAME_HAS_SUPER_HANDLER = "hasSuperHandler";
 
     private static final Class<?>[] EMPTY_CLASS_ARRAY = new Class<?>[0];
 
@@ -460,7 +460,7 @@ final class ProxyGenerator extends ClassWriter {
      * class file generation process.
      */
     private byte[] generateClassFile() {
-        visit(V14, accessFlags, dotToSlash(className), null,
+        visit(V16, accessFlags, dotToSlash(className), null,
                 JLR_PROXY, typeNames(interfaces));
 
         /*
@@ -493,7 +493,7 @@ final class ProxyGenerator extends ClassWriter {
             checkReturnTypes(sigmethods);
         }
 
-        visitField(ACC_PRIVATE|ACC_FINAL, NAME_SUPER_HANDLER, LJLR_INVOCATION_HANDLER, null, null);
+        visitField(ACC_PRIVATE|ACC_FINAL, NAME_HAS_SUPER_HANDLER, "Z", null, null);
         generateConstructor();
 
         for (List<ProxyMethod> sigmethods : proxyMethods.values()) {
@@ -595,6 +595,9 @@ final class ProxyGenerator extends ClassWriter {
         // private constructor: <init>(InvocationHandler, InvocationHandler)
         MethodVisitor ctor2 = visitMethod(Modifier.PRIVATE, NAME_CTOR,
                 INIT_DESC_IH_IH, null, null);
+        Label L_no_super_handler = new Label();
+        Label L_putfield_has_super_handler = new Label();
+
         ctor2.visitCode();
         ctor2.visitVarInsn(ALOAD, 0);
         ctor2.visitVarInsn(ALOAD, 1);
@@ -602,8 +605,14 @@ final class ProxyGenerator extends ClassWriter {
                 INIT_DESC_INVOCATIONHANDLER, false);
         ctor2.visitVarInsn(ALOAD, 0);
         ctor2.visitVarInsn(ALOAD, 2);
-        ctor2.visitFieldInsn(PUTFIELD, dotToSlash(className), NAME_SUPER_HANDLER,
-                LJLR_INVOCATION_HANDLER);
+        ctor2.visitJumpInsn(IFNULL, L_no_super_handler);
+        ctor2.visitInsn(ICONST_1);
+        ctor2.visitJumpInsn(GOTO, L_putfield_has_super_handler);
+        ctor2.visitLabel(L_no_super_handler);
+        ctor2.visitInsn(ICONST_0);
+        ctor2.visitLabel(L_putfield_has_super_handler);
+        ctor2.visitFieldInsn(PUTFIELD, dotToSlash(className), NAME_HAS_SUPER_HANDLER,
+                "Z");
         ctor2.visitInsn(RETURN);
         ctor2.visitMaxs(-1, -1);
         ctor2.visitEnd();
