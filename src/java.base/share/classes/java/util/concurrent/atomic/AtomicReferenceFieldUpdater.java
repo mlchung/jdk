@@ -108,7 +108,7 @@ public abstract class AtomicReferenceFieldUpdater<T,V> {
      * or the field is inaccessible to the caller according to Java language
      * access control
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static <U,W> AtomicReferenceFieldUpdater<U,W> newUpdater(Class<U> tclass,
                                                                     Class<W> vclass,
                                                                     String fieldName) {

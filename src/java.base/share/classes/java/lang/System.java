@@ -1669,7 +1669,7 @@ public final class System {
      *
      * @since 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static Logger getLogger(String name) {
         Objects.requireNonNull(name);
         final Class<?> caller = Reflection.getCallerClass();
@@ -1722,7 +1722,7 @@ public final class System {
      *
      * @since 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static Logger getLogger(String name, ResourceBundle bundle) {
         final ResourceBundle rb = Objects.requireNonNull(bundle);
         Objects.requireNonNull(name);
@@ -1852,7 +1852,7 @@ public final class System {
      * @see        java.lang.Runtime#load(java.lang.String)
      * @see        java.lang.SecurityManager#checkLink(java.lang.String)
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static void load(String filename) {
         Runtime.getRuntime().load0(Reflection.getCallerClass(), filename);
     }
@@ -1888,7 +1888,7 @@ public final class System {
      * @see        java.lang.Runtime#loadLibrary(java.lang.String)
      * @see        java.lang.SecurityManager#checkLink(java.lang.String)
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static void loadLibrary(String libname) {
         Runtime.getRuntime().loadLibrary0(Reflection.getCallerClass(), libname);
     }

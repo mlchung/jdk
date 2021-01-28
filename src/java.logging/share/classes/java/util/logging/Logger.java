@@ -686,7 +686,7 @@ public class Logger {
 
     // Synchronization is not required here. All synchronization for
     // adding a new Logger object is handled by LogManager.addLogger().
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static Logger getLogger(String name) {
         // This method is intentionally not a wrapper around a call
         // to getLogger(name, resourceBundleName). If it were then
@@ -763,7 +763,7 @@ public class Logger {
 
     // Synchronization is not required here. All synchronization for
     // adding a new Logger object is handled by LogManager.addLogger().
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static Logger getLogger(String name, String resourceBundleName) {
         return Logger.getLogger(name, resourceBundleName, Reflection.getCallerClass());
     }
@@ -871,7 +871,7 @@ public class Logger {
 
     // Synchronization is not required here. All synchronization for
     // adding a new anonymous Logger object is handled by doSetParent().
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static Logger getAnonymousLogger(String resourceBundleName) {
         LogManager manager = LogManager.getLogManager();
         // cleanup some Loggers that have been GC'ed

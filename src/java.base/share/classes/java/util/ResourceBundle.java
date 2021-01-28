@@ -849,7 +849,7 @@ public abstract class ResourceBundle {
      * @see <a href="#default_behavior">Resource Bundle Search and Loading Strategy</a>
      * @see <a href="#resource-bundle-modules">Resource Bundles and Named Modules</a>
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static final ResourceBundle getBundle(String baseName)
     {
         Class<?> caller = Reflection.getCallerClass();
@@ -893,7 +893,7 @@ public abstract class ResourceBundle {
      * @since 1.6
      * @revised 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static final ResourceBundle getBundle(String baseName,
                                                  Control control) {
         Class<?> caller = Reflection.getCallerClass();
@@ -922,7 +922,7 @@ public abstract class ResourceBundle {
      * @see <a href="#default_behavior">Resource Bundle Search and Loading Strategy</a>
      * @see <a href="#resource-bundle-modules">Resource Bundles and Named Modules</a>
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static final ResourceBundle getBundle(String baseName,
                                                  Locale locale)
     {
@@ -955,7 +955,7 @@ public abstract class ResourceBundle {
      * @see <a href="#default_behavior">Resource Bundle Search and Loading Strategy</a>
      * @see <a href="#resource-bundle-modules">Resource Bundles and Named Modules</a>
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static ResourceBundle getBundle(String baseName, Module module) {
         return getBundleFromModule(Reflection.getCallerClass(), module, baseName,
                                    Locale.getDefault(),
@@ -1007,7 +1007,7 @@ public abstract class ResourceBundle {
      * @see <a href="#default_behavior">Resource Bundle Search and Loading Strategy</a>
      * @see <a href="#resource-bundle-modules">Resource Bundles and Named Modules</a>
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static ResourceBundle getBundle(String baseName, Locale targetLocale, Module module) {
         return getBundleFromModule(Reflection.getCallerClass(), module, baseName, targetLocale,
                                    getDefaultControl(module, baseName));
@@ -1053,7 +1053,7 @@ public abstract class ResourceBundle {
      * @since 1.6
      * @revised 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static final ResourceBundle getBundle(String baseName, Locale targetLocale,
                                                  Control control) {
         Class<?> caller = Reflection.getCallerClass();
@@ -1267,7 +1267,7 @@ public abstract class ResourceBundle {
      * @revised 9
      * @see <a href="#resource-bundle-modules">Resource Bundles and Named Modules</a>
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static ResourceBundle getBundle(String baseName, Locale locale,
                                            ClassLoader loader)
     {
@@ -1491,7 +1491,7 @@ public abstract class ResourceBundle {
      * @since 1.6
      * @revised 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static ResourceBundle getBundle(String baseName, Locale targetLocale,
                                            ClassLoader loader, Control control) {
         if (loader == null || control == null) {
@@ -2229,7 +2229,7 @@ public abstract class ResourceBundle {
      * @revised 9
      * @see ResourceBundle.Control#getTimeToLive(String,Locale)
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static final void clearCache() {
         Class<?> caller = Reflection.getCallerClass();
         cacheList.keySet().removeIf(

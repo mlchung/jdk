@@ -358,7 +358,7 @@ public class Package extends NamedPackage implements java.lang.reflect.Annotated
      *
      * @revised 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     @Deprecated(since="9")
     @SuppressWarnings("deprecation")
     public static Package getPackage(String name) {
@@ -382,7 +382,7 @@ public class Package extends NamedPackage implements java.lang.reflect.Annotated
      *
      * @revised 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static Package[] getPackages() {
         ClassLoader cl = ClassLoader.getClassLoader(Reflection.getCallerClass());
         return cl != null ? cl.getPackages() : BootLoader.packages().toArray(Package[]::new);

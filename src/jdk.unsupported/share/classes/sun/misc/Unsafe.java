@@ -92,7 +92,7 @@ public final class Unsafe {
      *          class is not in the system domain in which all permissions
      *          are granted.
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static Unsafe getUnsafe() {
         Class<?> caller = Reflection.getCallerClass();
         if (!VM.isSystemDomainLoader(caller.getClassLoader()))

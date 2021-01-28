@@ -58,7 +58,7 @@ public class MissingCallerSensitive {
         }
     }
 
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public ClassLoader getCallerLoader() {
         Class<?> c = Reflection.getCallerClass();
         return c.getClassLoader();

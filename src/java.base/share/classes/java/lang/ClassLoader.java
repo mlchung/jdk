@@ -1611,7 +1611,7 @@ public abstract class ClassLoader {
      *
      * @since   1.7
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     protected static boolean registerAsParallelCapable() {
         Class<? extends ClassLoader> callerClass =
             Reflection.getCallerClass().asSubclass(ClassLoader.class);
@@ -1787,7 +1787,7 @@ public abstract class ClassLoader {
      *
      * @since  1.2
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.CLASS_LOADER_PERMISSION)
     public final ClassLoader getParent() {
         if (parent == null)
             return null;
@@ -1832,7 +1832,7 @@ public abstract class ClassLoader {
      *
      * @since 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.CLASS_LOADER_PERMISSION)
     public static ClassLoader getPlatformClassLoader() {
         SecurityManager sm = System.getSecurityManager();
         ClassLoader loader = getBuiltinPlatformClassLoader();
@@ -1919,7 +1919,7 @@ public abstract class ClassLoader {
      * @revised  1.4
      * @revised 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.CLASS_LOADER_PERMISSION)
     public static ClassLoader getSystemClassLoader() {
         switch (VM.initLevel()) {
             case 0:

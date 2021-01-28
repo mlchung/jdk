@@ -38,4 +38,39 @@ import static java.lang.annotation.ElementType.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({METHOD})
 public @interface CallerSensitive {
+    public enum Option {
+        /**
+         * Caller class
+         */
+        ACCESS_CHECK,
+        /**
+         * Caller's module if it's a named module
+         */
+        CALLER_MODULE,
+        /**
+         * Caller's class loader to do member access check when security manager is enabled
+         */
+        MEMBER_ACCESS_PERMISSION,
+        /**
+         * Caller's class loader to do class loader permission check when security manager is enabled.
+         */
+        CLASS_LOADER_PERMISSION,
+        /**
+         * Caller's class loader to do package access check when security manager is enabled
+         */
+        PACKAGE_ACCESS_PERMISSION,
+        /**
+         * The annotated method is a non-static and non-final caller-sensitive method
+         */
+        NON_STATIC_NON_FINAL,
+        /**
+         * The annotated method is for internal use only
+         */
+        INTERNAL,
+        /**
+         * Unconditinally getting caller class
+         */
+        UNCONDITIONAL
+    }
+    Option value();
 }

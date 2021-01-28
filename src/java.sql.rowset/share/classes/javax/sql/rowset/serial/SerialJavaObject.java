@@ -132,7 +132,7 @@ public class SerialJavaObject implements Serializable, Cloneable {
      * of that class.
      * @see Class#getFields
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.PACKAGE_ACCESS_PERMISSION)
     public Field[] getFields() throws SerialException {
         if (fields != null) {
             Class<?> c = this.obj.getClass();

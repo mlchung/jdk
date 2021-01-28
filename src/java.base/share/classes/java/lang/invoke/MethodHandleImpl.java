@@ -1146,7 +1146,6 @@ abstract class MethodHandleImpl {
             try {
                 Object cd = MethodHandles.classData(lookup, ConstantDescs.DEFAULT_NAME, Object.class);
                 if (cd instanceof Class c) {
-                    // System.out.println(c + " invoker " + invoker);
                     if (invoker.getModule() == c.getModule() &&
                             invoker.getName().startsWith(c.getName() + BindCaller.INVOKER_SUFFIX)) {
                         return c;
@@ -1171,10 +1170,33 @@ abstract class MethodHandleImpl {
             // from the boot layer to untrusted code.
             if (hostClass == null
                 ||    (hostClass.isArray() ||
-                       hostClass.isPrimitive() // ||
-                       /* hostClass.getName().startsWith("java.lang.invoke.") */)) {
-                throw new InternalError();  // does not happen, and should not anyway
+                       hostClass.isPrimitive() /* ||
+                       // MethodHandles::lookup is caller-sensitive.  Method::invoke uses Lookup on its declaring class
+                       // to find this CSM
+                       hostClass.getName().startsWith("java.lang.invoke.") */)) {
+                throw new InternalError(hostClass.getName());  // does not happen, and should not anyway
             }
+
+            MemberName member = mh.internalMemberName();
+            if (member != null) {
+                MemberName alt = IMPL_LOOKUP.resolveOrNull(member.getReferenceKind(),
+                        new MemberName(member.getDeclaringClass(), "reflected$$" + member.getName(),
+                                member.getMethodType().appendParameterTypes(Class.class),
+                                member.getReferenceKind()));
+                if (alt != null) {
+                    assert !alt.isCallerSensitive();
+                    MethodHandle dmh = DirectMethodHandle.make(alt);
+                    dmh = MethodHandles.insertArguments(dmh, dmh.type().parameterCount() - 1, hostClass);
+                    dmh = new WrappedMember(dmh, mh.type(), member, mh.isInvokeSpecial(), hostClass);
+                    return dmh;
+                }
+            }
+
+            // inject an invoker to invoke the method handle
+            return bindCallerWithInjectedInvoker(mh, hostClass);
+        }
+
+        static MethodHandle bindCallerWithInjectedInvoker(MethodHandle mh, Class<?> hostClass) {
             // For simplicity, convert mh to a varargs-like method.
             MethodHandle vamh = prepareForInvoker(mh);
             // Cache the result of makeInjectedInvoker once per argument class.
@@ -1267,7 +1289,7 @@ abstract class MethodHandleImpl {
             }
         }
 
-        @CallerSensitive
+        @CallerSensitive(CallerSensitive.Option.INTERNAL)
         @ForceInline // to ensure Reflection.getCallerClass optimization
         private static boolean checkCallerClass(Class<?> expected) {
             // This method is called via MH_checkCallerClass and so it's correct to ask for the immediate caller here.

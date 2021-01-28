@@ -396,7 +396,7 @@ public final class Module implements AnnotatedElement {
      *
      * @see #canRead
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.CALLER_MODULE)
     public Module addReads(Module other) {
         Objects.requireNonNull(other);
         if (this.isNamed()) {
@@ -739,7 +739,7 @@ public final class Module implements AnnotatedElement {
      * @jvms 5.4.3 Resolution
      * @see #isExported(String,Module)
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.CALLER_MODULE)
     public Module addExports(String pn, Module other) {
         if (pn == null)
             throw new IllegalArgumentException("package is null");
@@ -793,7 +793,7 @@ public final class Module implements AnnotatedElement {
      * @see java.lang.reflect.AccessibleObject#setAccessible(boolean)
      * @see java.lang.invoke.MethodHandles#privateLookupIn
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.CALLER_MODULE)
     public Module addOpens(String pn, Module other) {
         if (pn == null)
             throw new IllegalArgumentException("package is null");
@@ -1012,7 +1012,7 @@ public final class Module implements AnnotatedElement {
      * @see #canUse(Class)
      * @see ModuleDescriptor#uses()
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.CALLER_MODULE)
     public Module addUses(Class<?> service) {
         Objects.requireNonNull(service);
 
@@ -1628,7 +1628,7 @@ public final class Module implements AnnotatedElement {
      *
      * @see Class#getResourceAsStream(String)
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.CALLER_MODULE)
     public InputStream getResourceAsStream(String name) throws IOException {
         if (name.startsWith("/")) {
             name = name.substring(1);

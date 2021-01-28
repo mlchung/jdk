@@ -112,26 +112,26 @@ public class MethodHandles {
      * {@linkplain Lookup#ORIGINAL original} and
      * {@linkplain Lookup#hasFullPrivilegeAccess() full privilege access}.
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     @ForceInline // to ensure Reflection.getCallerClass optimization
     public static Lookup lookup() {
-        return newLookupforCaller(Reflection.getCallerClass());
+        return reflected$$lookup(Reflection.getCallerClass());
     }
 
     /**
      * This reflected$lookup method is the alternate implementation of
      * the lookup method when being invoked by reflection.
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.INTERNAL)
     private static Lookup reflected$lookup() {
         Class<?> caller = Reflection.getCallerClass();
         if (caller.getClassLoader() == null) {
             throw newIllegalArgumentException("illegal lookupClass: "+caller);
         }
-        return newLookupforCaller(caller);
+        return reflected$$lookup(caller);
     }
 
-    private static Lookup newLookupforCaller(Class<?> caller) {
+    private static Lookup reflected$$lookup(Class<?> caller) {
         /*
          * Fixup the caller class if MethodHandles::lookup is called via MethodHandle.
          * For caller-sensitive methods, the caller class returned from

@@ -87,7 +87,7 @@ public abstract class AtomicIntegerFieldUpdater<T> {
      * or the field is inaccessible to the caller according to Java language
      * access control
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static <U> AtomicIntegerFieldUpdater<U> newUpdater(Class<U> tclass,
                                                               String fieldName) {
         return new AtomicIntegerFieldUpdaterImpl<U>

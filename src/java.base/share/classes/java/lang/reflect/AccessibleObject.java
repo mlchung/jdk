@@ -120,7 +120,7 @@ public class AccessibleObject implements AnnotatedElement {
      * @see ReflectPermission
      * @revised 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.ACCESS_CHECK)
     public static void setAccessible(AccessibleObject[] array, boolean flag) {
         checkPermission();
         if (flag) {
@@ -197,7 +197,7 @@ public class AccessibleObject implements AnnotatedElement {
      * @see java.lang.invoke.MethodHandles#privateLookupIn
      * @revised 9
      */
-    @CallerSensitive   // overrides in Method/Field/Constructor are @CS
+    @CallerSensitive(CallerSensitive.Option.ACCESS_CHECK)   // overrides in Method/Field/Constructor are @CS
     public void setAccessible(boolean flag) {
         AccessibleObject.checkPermission();
         setAccessible0(flag);
@@ -257,7 +257,7 @@ public class AccessibleObject implements AnnotatedElement {
      * @since 9
      * @see java.lang.invoke.MethodHandles#privateLookupIn
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.ACCESS_CHECK)
     public final boolean trySetAccessible() {
         AccessibleObject.checkPermission();
 
@@ -458,7 +458,7 @@ public class AccessibleObject implements AnnotatedElement {
      * @see #trySetAccessible
      * @see #setAccessible(boolean)
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.ACCESS_CHECK)
     public final boolean canAccess(Object obj) {
         if (!Member.class.isInstance(this)) {
             return override;

@@ -174,7 +174,7 @@ public final class Constructor<T> extends Executable {
      *
      */
     @Override
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.ACCESS_CHECK)
     public void setAccessible(boolean flag) {
         AccessibleObject.checkPermission();
         if (flag) {
@@ -470,7 +470,7 @@ public final class Constructor<T> extends Executable {
      * @throws    ExceptionInInitializerError if the initialization provoked
      *              by this method fails.
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.ACCESS_CHECK)
     @ForceInline // to ensure Reflection.getCallerClass optimization
     public T newInstance(Object ... initargs)
         throws InstantiationException, IllegalAccessException,

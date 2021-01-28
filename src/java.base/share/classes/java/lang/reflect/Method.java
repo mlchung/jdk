@@ -187,7 +187,7 @@ public final class Method extends Executable {
      * @throws SecurityException {@inheritDoc}
      */
     @Override
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.ACCESS_CHECK)
     public void setAccessible(boolean flag) {
         AccessibleObject.checkPermission();
         if (flag) checkCanSetAccessible(Reflection.getCallerClass());
@@ -547,7 +547,7 @@ public final class Method extends Executable {
      * @throws    ExceptionInInitializerError if the initialization
      * provoked by this method fails.
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.ACCESS_CHECK)
     @ForceInline // to ensure Reflection.getCallerClass optimization
     @IntrinsicCandidate
     public Object invoke(Object obj, Object... args)

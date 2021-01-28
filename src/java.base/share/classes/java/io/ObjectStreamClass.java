@@ -301,7 +301,7 @@ public class ObjectStreamClass implements Serializable {
      *
      * @return  the {@code Class} instance that this descriptor represents
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.PACKAGE_ACCESS_PERMISSION)
     public Class<?> forClass() {
         if (cl == null) {
             return null;

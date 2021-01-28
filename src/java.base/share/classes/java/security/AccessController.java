@@ -306,7 +306,7 @@ public final class AccessController {
      * @see java.security.DomainCombiner
      */
 
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static <T> T doPrivileged(PrivilegedAction<T> action)
     {
         return executePrivileged(action, null, Reflection.getCallerClass());
@@ -337,7 +337,7 @@ public final class AccessController {
      *
      * @since 1.6
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static <T> T doPrivilegedWithCombiner(PrivilegedAction<T> action) {
         AccessControlContext acc = getStackAccessControlContext();
         if (acc == null) {
@@ -382,7 +382,7 @@ public final class AccessController {
      * @see #doPrivileged(PrivilegedAction)
      * @see #doPrivileged(PrivilegedExceptionAction,AccessControlContext)
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static <T> T doPrivileged(PrivilegedAction<T> action,
                                      AccessControlContext context)
     {
@@ -436,7 +436,7 @@ public final class AccessController {
      *
      * @since 1.8
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static <T> T doPrivileged(PrivilegedAction<T> action,
         AccessControlContext context, Permission... perms) {
 
@@ -499,7 +499,7 @@ public final class AccessController {
      *
      * @since 1.8
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static <T> T doPrivilegedWithCombiner(PrivilegedAction<T> action,
         AccessControlContext context, Permission... perms) {
 
@@ -543,7 +543,7 @@ public final class AccessController {
      * @see #doPrivilegedWithCombiner(PrivilegedExceptionAction)
      * @see java.security.DomainCombiner
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static <T> T
         doPrivileged(PrivilegedExceptionAction<T> action)
         throws PrivilegedActionException
@@ -587,7 +587,7 @@ public final class AccessController {
      *
      * @since 1.6
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static <T> T doPrivilegedWithCombiner(PrivilegedExceptionAction<T> action)
         throws PrivilegedActionException
     {
@@ -679,7 +679,7 @@ public final class AccessController {
      * @see #doPrivileged(PrivilegedAction)
      * @see #doPrivileged(PrivilegedAction,AccessControlContext)
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static <T> T
         doPrivileged(PrivilegedExceptionAction<T> action,
                      AccessControlContext context)
@@ -851,7 +851,7 @@ public final class AccessController {
      *
      * @since 1.8
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static <T> T doPrivileged(PrivilegedExceptionAction<T> action,
                                      AccessControlContext context, Permission... perms)
         throws PrivilegedActionException
@@ -916,7 +916,7 @@ public final class AccessController {
      *
      * @since 1.8
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static <T> T doPrivilegedWithCombiner(PrivilegedExceptionAction<T> action,
                                                  AccessControlContext context,
                                                  Permission... perms)

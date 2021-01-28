@@ -257,7 +257,7 @@ public interface InvocationHandler {
      * @since 16
      * @jvms 5.4.3. Method Resolution
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.ACCESS_CHECK)
     public static Object invokeDefault(Object proxy, Method method, Object... args)
             throws Throwable {
         Objects.requireNonNull(proxy);

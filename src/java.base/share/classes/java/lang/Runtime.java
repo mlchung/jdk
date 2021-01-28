@@ -728,7 +728,7 @@ public class Runtime {
      * @see        java.lang.SecurityException
      * @see        java.lang.SecurityManager#checkLink(java.lang.String)
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public void load(String filename) {
         load0(Reflection.getCallerClass(), filename);
     }
@@ -791,7 +791,7 @@ public class Runtime {
      * @see        java.lang.SecurityException
      * @see        java.lang.SecurityManager#checkLink(java.lang.String)
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public void loadLibrary(String libname) {
         loadLibrary0(Reflection.getCallerClass(), libname);
     }

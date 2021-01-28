@@ -368,14 +368,14 @@ public final class Class<T> implements java.io.Serializable,
      * @jls 12.3 Linking of Classes and Interfaces
      * @jls 12.4 Initialization of Classes and Interfaces
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static Class<?> forName(String className)
                 throws ClassNotFoundException {
         Class<?> caller = Reflection.getCallerClass();
         return forName0(className, true, ClassLoader.getClassLoader(caller), caller);
     }
 
-    private static Class<?> reflected$$forName(Class<?> caller, String className)
+    private static Class<?> reflected$$forName(String className, Class<?> caller)
             throws ClassNotFoundException {
         return forName0(className, true, ClassLoader.getClassLoader(caller), caller);
     }
@@ -446,9 +446,9 @@ public final class Class<T> implements java.io.Serializable,
      * @jls 12.2 Loading of Classes and Interfaces
      * @jls 12.3 Linking of Classes and Interfaces
      * @jls 12.4 Initialization of Classes and Interfaces
-     * @since     1.2
+     * @since     1.2'+}
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.CLASS_LOADER_PERMISSION)
     public static Class<?> forName(String name, boolean initialize,
                                    ClassLoader loader)
         throws ClassNotFoundException
@@ -459,11 +459,21 @@ public final class Class<T> implements java.io.Serializable,
             // Reflective call to get caller class is only needed if a security manager
             // is present.  Avoid the overhead of making this call otherwise.
             caller = Reflection.getCallerClass();
+        }
+        return reflected$$forName(name, initialize, loader, caller);
+    }
+
+    private static Class<?> reflected$$forName(String name, boolean initialize,
+                                               ClassLoader loader, Class<?> caller)
+            throws ClassNotFoundException
+    {
+        SecurityManager sm = System.getSecurityManager();
+        if (sm != null) {
             if (loader == null) {
                 ClassLoader ccl = ClassLoader.getClassLoader(caller);
                 if (ccl != null) {
                     sm.checkPermission(
-                        SecurityConstants.GET_CLASSLOADER_PERMISSION);
+                            SecurityConstants.GET_CLASSLOADER_PERMISSION);
                 }
             }
         }
@@ -519,11 +529,13 @@ public final class Class<T> implements java.io.Serializable,
      *         in a module.</li>
      *         </ul>
      *
+     *
+     *
      * @jls 12.2 Loading of Classes and Interfaces
      * @jls 12.3 Linking of Classes and Interfaces
      * @since 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.CLASS_LOADER_PERMISSION)
     public static Class<?> forName(Module module, String name) {
         Objects.requireNonNull(module);
         Objects.requireNonNull(name);
@@ -603,7 +615,7 @@ public final class Class<T> implements java.io.Serializable,
      *          s.checkPackageAccess()} denies access to the package
      *          of this class.
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     @Deprecated(since="9")
     public T newInstance()
         throws InstantiationException, IllegalAccessException
@@ -888,7 +900,7 @@ public final class Class<T> implements java.io.Serializable,
      * @see SecurityManager#checkPermission
      * @see java.lang.RuntimePermission
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.CLASS_LOADER_PERMISSION)
     @ForceInline // to ensure Reflection.getCallerClass optimization
     public ClassLoader getClassLoader() {
         ClassLoader cl = getClassLoader0();
@@ -1330,7 +1342,7 @@ public final class Class<T> implements java.io.Serializable,
      *         </ul>
      * @since 1.5
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     public Method getEnclosingMethod() throws SecurityException {
         EnclosingMethodInfo enclosingInfo = getEnclosingMethodInfo();
 
@@ -1487,7 +1499,7 @@ public final class Class<T> implements java.io.Serializable,
      *         </ul>
      * @since 1.5
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     public Constructor<?> getEnclosingConstructor() throws SecurityException {
         EnclosingMethodInfo enclosingInfo = getEnclosingMethodInfo();
 
@@ -1552,7 +1564,7 @@ public final class Class<T> implements java.io.Serializable,
      *         denies access to the package of the declaring class
      * @since 1.1
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.PACKAGE_ACCESS_PERMISSION)
     public Class<?> getDeclaringClass() throws SecurityException {
         final Class<?> candidate = getDeclaringClass0();
 
@@ -1582,7 +1594,7 @@ public final class Class<T> implements java.io.Serializable,
      *             denies access to the package of the enclosing class
      * @since 1.5
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.PACKAGE_ACCESS_PERMISSION)
     public Class<?> getEnclosingClass() throws SecurityException {
         // There are five kinds of classes (or interfaces):
         // a) Top level classes
@@ -1826,7 +1838,7 @@ public final class Class<T> implements java.io.Serializable,
      *
      * @since 1.1
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     public Class<?>[] getClasses() {
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
@@ -1895,7 +1907,7 @@ public final class Class<T> implements java.io.Serializable,
      * @jls 8.2 Class Members
      * @jls 8.3 Field Declarations
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     public Field[] getFields() throws SecurityException {
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
@@ -1985,7 +1997,7 @@ public final class Class<T> implements java.io.Serializable,
      * @jls 8.4 Method Declarations
      * @since 1.1
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     public Method[] getMethods() throws SecurityException {
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
@@ -2025,7 +2037,7 @@ public final class Class<T> implements java.io.Serializable,
      *
      * @since 1.1
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     public Constructor<?>[] getConstructors() throws SecurityException {
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
@@ -2077,7 +2089,7 @@ public final class Class<T> implements java.io.Serializable,
      * @jls 8.2 Class Members
      * @jls 8.3 Field Declarations
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     public Field getField(String name)
         throws NoSuchFieldException, SecurityException {
         Objects.requireNonNull(name);
@@ -2186,7 +2198,7 @@ public final class Class<T> implements java.io.Serializable,
      * @jls 8.4 Method Declarations
      * @since 1.1
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     public Method getMethod(String name, Class<?>... parameterTypes)
         throws NoSuchMethodException, SecurityException {
         Objects.requireNonNull(name);
@@ -2230,7 +2242,7 @@ public final class Class<T> implements java.io.Serializable,
      *
      * @since 1.1
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     public Constructor<T> getConstructor(Class<?>... parameterTypes)
         throws NoSuchMethodException, SecurityException
     {
@@ -2278,7 +2290,7 @@ public final class Class<T> implements java.io.Serializable,
      *
      * @since 1.1
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     public Class<?>[] getDeclaredClasses() throws SecurityException {
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
@@ -2330,7 +2342,7 @@ public final class Class<T> implements java.io.Serializable,
      * @jls 8.2 Class Members
      * @jls 8.3 Field Declarations
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     public Field[] getDeclaredFields() throws SecurityException {
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
@@ -2378,7 +2390,7 @@ public final class Class<T> implements java.io.Serializable,
      * @jls 8.10 Record Classes
      * @since 16
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     public RecordComponent[] getRecordComponents() {
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
@@ -2441,7 +2453,7 @@ public final class Class<T> implements java.io.Serializable,
      * @jls 8.4 Method Declarations
      * @since 1.1
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     public Method[] getDeclaredMethods() throws SecurityException {
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
@@ -2490,7 +2502,7 @@ public final class Class<T> implements java.io.Serializable,
      *
      * @since 1.1
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     public Constructor<?>[] getDeclaredConstructors() throws SecurityException {
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
@@ -2540,7 +2552,7 @@ public final class Class<T> implements java.io.Serializable,
      * @jls 8.2 Class Members
      * @jls 8.3 Field Declarations
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     public Field getDeclaredField(String name)
         throws NoSuchFieldException, SecurityException {
         Objects.requireNonNull(name);
@@ -2604,7 +2616,7 @@ public final class Class<T> implements java.io.Serializable,
      * @jls 8.4 Method Declarations
      * @since 1.1
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     public Method getDeclaredMethod(String name, Class<?>... parameterTypes)
         throws NoSuchMethodException, SecurityException {
         Objects.requireNonNull(name);
@@ -2682,7 +2694,7 @@ public final class Class<T> implements java.io.Serializable,
      *
      * @since 1.1
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.MEMBER_ACCESS_PERMISSION)
     public Constructor<T> getDeclaredConstructor(Class<?>... parameterTypes)
         throws NoSuchMethodException, SecurityException
     {
@@ -2750,7 +2762,7 @@ public final class Class<T> implements java.io.Serializable,
      * @since  1.1
      * @revised 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.ACCESS_CHECK)
     public InputStream getResourceAsStream(String name) {
         name = resolveName(name);
 
@@ -2846,7 +2858,7 @@ public final class Class<T> implements java.io.Serializable,
      * @since  1.1
      * @revised 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.ACCESS_CHECK)
     public URL getResource(String name) {
         name = resolveName(name);
 
@@ -4152,7 +4164,7 @@ public final class Class<T> implements java.io.Serializable,
      * @jvms 4.7.29 The {@code NestMembers} Attribute
      * @jvms 5.4.4 Access Control
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.PACKAGE_ACCESS_PERMISSION)
     public Class<?> getNestHost() {
         if (isPrimitive() || isArray()) {
             return this;
@@ -4243,7 +4255,7 @@ public final class Class<T> implements java.io.Serializable,
      * @jvms 4.7.28 The {@code NestHost} Attribute
      * @jvms 4.7.29 The {@code NestMembers} Attribute
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.PACKAGE_ACCESS_PERMISSION)
     public Class<?>[] getNestMembers() {
         if (isPrimitive() || isArray()) {
             return new Class<?>[] { this };
@@ -4434,7 +4446,7 @@ public final class Class<T> implements java.io.Serializable,
      * @since 15
      */
     @jdk.internal.PreviewFeature(feature=jdk.internal.PreviewFeature.Feature.SEALED_CLASSES, essentialAPI=false)
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.PACKAGE_ACCESS_PERMISSION)
     public Class<?>[] getPermittedSubclasses() {
         Class<?>[] subClasses;
         if (isArray() || isPrimitive() || (subClasses = getPermittedSubclasses0()) == null) {

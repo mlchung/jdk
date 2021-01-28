@@ -214,7 +214,7 @@ public class ObjectStreamField
      * @return  a {@code Class} object representing the type of the
      *          serializable field
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.NON_STATIC_NON_FINAL)
     public Class<?> getType() {
         if (System.getSecurityManager() != null) {
             Class<?> caller = Reflection.getCallerClass();

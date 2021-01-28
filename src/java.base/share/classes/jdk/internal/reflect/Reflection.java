@@ -66,7 +66,7 @@ public class Reflection {
     /** Returns the class of the caller of the method calling this method,
         ignoring frames associated with java.lang.reflect.Method.invoke()
         and its implementation. */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.INTERNAL)
     @IntrinsicCandidate
     public static native Class<?> getCallerClass();
 

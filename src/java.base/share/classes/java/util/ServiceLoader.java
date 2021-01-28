@@ -1636,7 +1636,7 @@ public final class ServiceLoader<S>
      *
      * @revised 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static <S> ServiceLoader<S> load(Class<S> service,
                                             ClassLoader loader)
     {
@@ -1681,7 +1681,7 @@ public final class ServiceLoader<S>
      *
      * @revised 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static <S> ServiceLoader<S> load(Class<S> service) {
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         return new ServiceLoader<>(Reflection.getCallerClass(), service, cl);
@@ -1716,7 +1716,7 @@ public final class ServiceLoader<S>
      *
      * @revised 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static <S> ServiceLoader<S> loadInstalled(Class<S> service) {
         ClassLoader cl = ClassLoader.getPlatformClassLoader();
         return new ServiceLoader<>(Reflection.getCallerClass(), service, cl);
@@ -1768,7 +1768,7 @@ public final class ServiceLoader<S>
      *
      * @since 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static <S> ServiceLoader<S> load(ModuleLayer layer, Class<S> service) {
         return new ServiceLoader<>(Reflection.getCallerClass(), layer, service);
     }

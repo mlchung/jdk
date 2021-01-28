@@ -52,7 +52,7 @@ public class CSM {
      *
      * StackWalker::getCallerClass is expected to throw UOE
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static Class<?> caller() {
         Class<?> c1 = Reflection.getCallerClass();
 

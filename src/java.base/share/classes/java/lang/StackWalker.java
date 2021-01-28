@@ -482,7 +482,7 @@ public final class StackWalker {
      * @return the result of applying the function to the stream of
      *         {@linkplain StackFrame stack frame}.
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.INTERNAL)
     public <T> T walk(Function<? super Stream<StackFrame>, ? extends T> function) {
         // Returning a Stream<StackFrame> would be unsafe, as the stream could
         // be used to access the stack frames in an uncontrolled manner.  For
@@ -511,7 +511,7 @@ public final class StackWalker {
      * @param action an action to be performed on each {@code StackFrame}
      *               of the stack of the current thread
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.INTERNAL)
     public void forEach(Consumer<? super StackFrame> action) {
         Objects.requireNonNull(action);
         StackStreamFactory.makeStackTraverser(this, s -> {
@@ -590,7 +590,7 @@ public final class StackWalker {
      *         when this {@code getCallerClass} method is called from a method
      *         which is the last frame on the stack.
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.INTERNAL)
     public Class<?> getCallerClass() {
         if (!retainClassRef) {
             throw new UnsupportedOperationException("This stack walker " +

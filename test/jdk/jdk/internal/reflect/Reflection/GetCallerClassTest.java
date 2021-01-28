@@ -90,7 +90,7 @@ public class GetCallerClassTest {
         }
     }
 
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     private void testNonSystemMethod() {
         try {
             Class<?> c = Reflection.getCallerClass();

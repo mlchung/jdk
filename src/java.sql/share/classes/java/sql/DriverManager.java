@@ -182,7 +182,7 @@ public class DriverManager {
      * has been exceeded and has at least tried to cancel the
      * current database connection attempt
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static Connection getConnection(String url,
         java.util.Properties info) throws SQLException {
 
@@ -213,7 +213,7 @@ public class DriverManager {
      * has been exceeded and has at least tried to cancel the
      * current database connection attempt
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static Connection getConnection(String url,
         String user, String password) throws SQLException {
         java.util.Properties info = new java.util.Properties();
@@ -243,7 +243,7 @@ public class DriverManager {
      * has been exceeded and has at least tried to cancel the
      * current database connection attempt
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static Connection getConnection(String url)
         throws SQLException {
 
@@ -262,7 +262,7 @@ public class DriverManager {
      * that can connect to the given URL
      * @throws SQLException if a database access error occurs
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static Driver getDriver(String url)
         throws SQLException {
 
@@ -374,7 +374,7 @@ public class DriverManager {
      *
      * @see SecurityManager#checkPermission
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static void deregisterDriver(Driver driver) throws SQLException {
         if (driver == null) {
             return;
@@ -419,7 +419,7 @@ public class DriverManager {
      * @return the list of JDBC Drivers loaded by the caller's class loader
      * @see #drivers()
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static Enumeration<Driver> getDrivers() {
         ensureDriversInitialized();
 
@@ -433,7 +433,7 @@ public class DriverManager {
      * @return the stream of JDBC Drivers loaded by the caller's class loader
      * @since 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static Stream<Driver> drivers() {
         ensureDriversInitialized();
 

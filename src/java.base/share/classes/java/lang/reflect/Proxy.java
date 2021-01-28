@@ -385,7 +385,7 @@ public class Proxy implements java.io.Serializable {
      * @revised 9
      */
     @Deprecated
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.CLASS_LOADER_PERMISSION)
     public static Class<?> getProxyClass(ClassLoader loader,
                                          Class<?>... interfaces)
         throws IllegalArgumentException
@@ -1012,7 +1012,7 @@ public class Proxy implements java.io.Serializable {
      * @see <a href="#membership">Package and Module Membership of Proxy Class</a>
      * @revised 9
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.CLASS_LOADER_PERMISSION)
     public static Object newProxyInstance(ClassLoader loader,
                                           Class<?>[] interfaces,
                                           InvocationHandler h) {
@@ -1113,7 +1113,7 @@ public class Proxy implements java.io.Serializable {
      *          s.checkPackageAccess()} denies access to the invocation
      *          handler's class.
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.PACKAGE_ACCESS_PERMISSION)
     public static InvocationHandler getInvocationHandler(Object proxy)
         throws IllegalArgumentException
     {

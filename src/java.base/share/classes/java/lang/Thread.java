@@ -1472,7 +1472,7 @@ public class Thread implements Runnable {
      *
      * @since 1.2
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.NON_STATIC_NON_FINAL)
     public ClassLoader getContextClassLoader() {
         if (contextClassLoader == null)
             return null;

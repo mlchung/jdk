@@ -87,7 +87,7 @@ public abstract class AtomicLongFieldUpdater<T> {
      * or the field is inaccessible to the caller according to Java language
      * access control
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static <U> AtomicLongFieldUpdater<U> newUpdater(Class<U> tclass,
                                                            String fieldName) {
         Class<?> caller = Reflection.getCallerClass();

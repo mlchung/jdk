@@ -31,7 +31,7 @@ public class CSM {
      * Returns the caller of this caller-sensitive method returned by
      * by Reflection::getCallerClass.
      */
-    @CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public static Class<?> caller() {
         return Reflection.getCallerClass();
     }

@@ -23,8 +23,10 @@
 
 package boot;
 
+import jdk.internal.reflect.CallerSensitive;
+
 public class GetCallerClass {
-    @jdk.internal.reflect.CallerSensitive
+    @CallerSensitive(CallerSensitive.Option.UNCONDITIONAL)
     public ClassLoader getCallerLoader() {
         Class<?> c = jdk.internal.reflect.Reflection.getCallerClass();
         return c.getClassLoader();
