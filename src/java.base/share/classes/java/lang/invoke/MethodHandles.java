@@ -185,11 +185,11 @@ public class MethodHandles {
         return Lookup.IMPL_LOOKUP.unreflectField(field, isSetter);
     }
 
-    static MethodHandle unreflectConstructorForSerialization(Constructor<?> ctor, Class<?> instantiatedClass) {
+    static MethodHandle unreflectConstructorForSerialization(Constructor<?> ctor, Class<?> instantiatedClass) throws ReflectiveOperationException {
         if (!ctor.getDeclaringClass().isAssignableFrom(instantiatedClass)) {
             throw newIllegalArgumentException("Constructed type is not assinable to", ctor, instantiatedClass);
         }
-        MemberName mn = Lookup.IMPL_LOOKUP.resolveOrFail(REF_newInvokeSpecial, new MemberName(ctor));
+        MemberName mn = new MemberName(ctor);
         return DirectMethodHandle.makeAllocator(mn, instantiatedClass).setVarargs(mn);
     }
 
