@@ -1823,6 +1823,12 @@ abstract class MethodHandleImpl {
             }
 
             @Override
+            public MethodHandle unreflectConstructorForSerialization(Constructor<?> ctor,
+                    Class<?> instantiatedClass) throws IllegalAccessException {
+                return MethodHandles.unreflectConstructorForSerialization(ctor, instantiatedClass);
+            }
+
+            @Override
             public VarHandle filterValue(VarHandle target, MethodHandle filterToTarget, MethodHandle filterFromTarget) {
                 return VarHandles.filterValue(target, filterToTarget, filterFromTarget);
             }
@@ -1851,6 +1857,7 @@ abstract class MethodHandleImpl {
             public VarHandle insertCoordinates(VarHandle target, int pos, Object... values) {
                 return VarHandles.insertCoordinates(target, pos, values);
             }
+
         });
     }
 

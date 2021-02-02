@@ -77,6 +77,22 @@ final class MethodHandleAccessorFactory {
         }
     }
 
+    static ConstructorAccessor newConstructorAccessorForSerialization(Constructor<?> ctor, Class<?> instantiatedClass) {
+        try {
+            MethodHandle mh = JLIA.unreflectConstructorForSerialization(ctor, instantiatedClass);
+            int paramCount = mh.type().parameterCount();
+
+            // invoke constructor with an exception handler
+            mh = MethodHandles.catchException(mh, Throwable.class,
+                                              WRAP.asType(methodType(mh.type().returnType(), Throwable.class)));
+            MethodHandle target = mh.asSpreader(Object[].class, paramCount)
+                                    .asType(methodType(Object.class, Object[].class));
+            return new DirectConstructorAccessorImpl(ctor, target);
+        } catch (IllegalAccessException e) {
+            throw new InternalError(e);
+        }
+    }
+
     static FieldAccessor newFieldAccessor(Field field, boolean isReadOnly) {
         try {
             MethodHandle getter = JLIA.unreflectField(field, false);
