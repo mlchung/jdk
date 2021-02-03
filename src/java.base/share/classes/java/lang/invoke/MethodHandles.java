@@ -185,7 +185,7 @@ public class MethodHandles {
         return Lookup.IMPL_LOOKUP.unreflectField(field, isSetter);
     }
 
-    static MethodHandle unreflectConstructorForSerialization(Constructor<?> ctor, Class<?> instantiatedClass) throws ReflectiveOperationException {
+    static MethodHandle unreflectConstructorForSerialization(Constructor<?> ctor, Class<?> instantiatedClass) throws IllegalAccessException {
         if (!ctor.getDeclaringClass().isAssignableFrom(instantiatedClass)) {
             throw newIllegalArgumentException("Constructed type is not assinable to", ctor, instantiatedClass);
         }

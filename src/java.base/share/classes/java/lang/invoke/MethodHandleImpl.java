@@ -1824,7 +1824,7 @@ abstract class MethodHandleImpl {
 
             @Override
             public MethodHandle unreflectConstructorForSerialization(Constructor<?> ctor,
-                    Class<?> instantiatedClass) throws ReflectiveOperationException {
+                    Class<?> instantiatedClass) throws IllegalAccessException {
                 return MethodHandles.unreflectConstructorForSerialization(ctor, instantiatedClass);
             }
 

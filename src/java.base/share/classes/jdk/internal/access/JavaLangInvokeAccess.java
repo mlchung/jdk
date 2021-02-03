@@ -139,7 +139,7 @@ public interface JavaLangInvokeAccess {
     MethodHandle unreflectMethod(Class<?> caller, Method method) throws IllegalAccessException;
     MethodHandle unreflectConstructor(Constructor<?> ctor) throws IllegalAccessException;
     MethodHandle unreflectField(Field field, boolean isSetter) throws IllegalAccessException;
-    MethodHandle unreflectConstructorForSerialization(Constructor<?> ctor, Class<?> instantiatedClass) throws ReflectiveOperationException;
+    MethodHandle unreflectConstructorForSerialization(Constructor<?> ctor, Class<?> instantiatedClass) throws IllegalAccessException;
 
 
 }

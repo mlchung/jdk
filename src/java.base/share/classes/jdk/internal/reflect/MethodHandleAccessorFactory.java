@@ -88,7 +88,7 @@ final class MethodHandleAccessorFactory {
             MethodHandle target = mh.asSpreader(Object[].class, paramCount)
                                     .asType(methodType(Object.class, Object[].class));
             return new DirectConstructorAccessorImpl(ctor, target);
-        } catch (ReflectiveOperationException e) {
+        } catch (IllegalAccessException e) {
             throw new InternalError(e);
         }
     }
