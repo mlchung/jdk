@@ -483,14 +483,18 @@ public class ReflectionFactory {
 
     private final Constructor<?> generateConstructor(Class<?> cl,
                                                      Constructor<?> constructorToCall) {
-
-
-        ConstructorAccessor acc = new MethodAccessorGenerator().
-            generateSerializationConstructor(cl,
+        final ConstructorAccessor acc;
+        if (useDirectMethodHandle) {
+            assert VM.isModuleSystemInited();
+            acc = MethodHandleAccessorFactory.newConstructorAccessorForSerialization(constructorToCall, cl);
+        } else {
+            acc = new MethodAccessorGenerator().
+                    generateSerializationConstructor(cl,
                                              constructorToCall.getParameterTypes(),
                                              constructorToCall.getExceptionTypes(),
                                              constructorToCall.getModifiers(),
                                              constructorToCall.getDeclaringClass());
+        }
         Constructor<?> c = newConstructor(constructorToCall.getDeclaringClass(),
                                           constructorToCall.getParameterTypes(),
                                           constructorToCall.getExceptionTypes(),
