@@ -766,6 +766,19 @@ void TemplateTable::index_check_without_pop(Register array, Register index) {
   __ bind(skip);
 }
 
+void TemplateTable::store_array_element_check(Register array, Register tmp) {
+  Label normal_array;
+  const int is_frozen_mask = markWord::frozen_bit_in_place;
+  __ movptr(tmp, Address(array, oopDesc::mark_offset_in_bytes()));
+  __ andptr(tmp, is_frozen_mask);
+  __ cmpptr(tmp, is_frozen_mask);
+  __ jcc(Assembler::notEqual, normal_array);
+
+  __ jump(ExternalAddress(Interpreter::_throw_ArrayStoreException_entry));
+  __ bind(normal_array);
+}
+
+
 void TemplateTable::iaload() {
   transition(itos, itos);
   // rax: index
@@ -1063,6 +1076,7 @@ void TemplateTable::iastore() {
   // rax: value
   // rbx: index
   // rdx: array
+
   index_check(rdx, rbx); // prefer index in rbx
   __ access_store_at(T_INT, IN_HEAP | IS_ARRAY,
                      Address(rdx, rbx, Address::times_4,
@@ -1118,6 +1132,9 @@ void TemplateTable::aastore() {
   __ movptr(rax, at_tos());    // value
   __ movl(rcx, at_tos_p1()); // index
   __ movptr(rdx, at_tos_p2()); // array
+
+  // test frozen array
+  store_array_element_check(rdx, rbx);
 
   Address element_address(rdx, rcx,
                           UseCompressedOops? Address::times_4 : Address::times_ptr,

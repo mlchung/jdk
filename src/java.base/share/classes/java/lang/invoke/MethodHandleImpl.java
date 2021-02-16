@@ -32,6 +32,7 @@ import jdk.internal.org.objectweb.asm.ClassWriter;
 import jdk.internal.org.objectweb.asm.MethodVisitor;
 import jdk.internal.reflect.CallerSensitive;
 import jdk.internal.reflect.Reflection;
+import jdk.internal.util.FrozenArrays;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.annotation.Hidden;
 import jdk.internal.vm.annotation.Stable;
@@ -1679,7 +1680,15 @@ abstract class MethodHandleImpl {
             NF_profileBoolean = 5,
             NF_LIMIT = 6;
 
-    private static final @Stable NamedFunction[] NFS = new NamedFunction[NF_LIMIT];
+    private static final @Stable NamedFunction[] NFS = initNamedFunctions();
+
+    private static final NamedFunction[] initNamedFunctions() {
+        FrozenArrays.Builder<NamedFunction> builder = new FrozenArrays.Builder<>(NamedFunction[].class, NF_LIMIT);
+        for (byte func=0; func < NF_LIMIT; func++) {
+            builder.set(func, getFunction(func));
+        }
+        return builder.build();
+    }
 
     static NamedFunction getFunction(byte func) {
         NamedFunction nf = NFS[func];

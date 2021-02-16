@@ -90,6 +90,19 @@
 //  - INFLATING() is a distinguished markword value of all zeros that is
 //    used when inflating an existing stack-lock into an ObjectMonitor.
 //    See below for is_being_inflated() and INFLATING().
+//
+//  "biased lock bit" is free to use: using this bit to indicate frozen array.
+//  Revised Bit-format of an object header (most significant first, big endian layout below):
+//
+//  32 bits:
+//  --------
+//   hash:24 ------------>| frozen:1   age:4    larval:1 lock:2 (normal object)
+//
+//  64 bits:
+//  --------
+//  unused:25 hash:31 -->|  frozen:1   age:4    larval:1 lock:2 (normal object)
+//
+
 
 class BasicLock;
 class ObjectMonitor;
@@ -129,17 +142,22 @@ class markWord {
   static const int age_bits                       = 4;
   static const int lock_bits                      = 2;
   static const int biased_lock_bits               = 1;
-  static const int max_hash_bits                  = BitsPerWord - age_bits - lock_bits - biased_lock_bits;
+  static const int frozen_bits                    = 1;
+  static const int larval_bits                    = 1;
+  static const int max_hash_bits                  = BitsPerWord - age_bits - lock_bits - frozen_bits - larval_bits;
   static const int hash_bits                      = max_hash_bits > 31 ? 31 : max_hash_bits;
-  static const int unused_gap_bits                = LP64_ONLY(1) NOT_LP64(0);
+  static const int unused_gap_bits                = LP64_ONLY(0) NOT_LP64(0);
   static const int epoch_bits                     = 2;
+
 
   // The biased locking code currently requires that the age bits be
   // contiguous to the lock bits.
   static const int lock_shift                     = 0;
   static const int biased_lock_shift              = lock_bits;
   static const int age_shift                      = lock_bits + biased_lock_bits;
-  static const int unused_gap_shift               = age_shift + age_bits;
+  static const int larval_shift                   = lock_bits;
+  static const int frozen_shift                   = age_shift + age_bits;
+  static const int unused_gap_shift               = frozen_shift + frozen_bits;
   static const int hash_shift                     = unused_gap_shift + unused_gap_bits;
   static const int epoch_shift                    = hash_shift;
 
@@ -148,10 +166,18 @@ class markWord {
   static const uintptr_t biased_lock_mask         = right_n_bits(lock_bits + biased_lock_bits);
   static const uintptr_t biased_lock_mask_in_place= biased_lock_mask << lock_shift;
   static const uintptr_t biased_lock_bit_in_place = 1 << biased_lock_shift;
+
   static const uintptr_t age_mask                 = right_n_bits(age_bits);
   static const uintptr_t age_mask_in_place        = age_mask << age_shift;
   static const uintptr_t epoch_mask               = right_n_bits(epoch_bits);
   static const uintptr_t epoch_mask_in_place      = epoch_mask << epoch_shift;
+
+  static const uintptr_t frozen_mask              = right_n_bits(frozen_bits);
+  static const uintptr_t frozen_mask_in_place     = frozen_mask << frozen_shift;
+  static const uintptr_t frozen_bit_in_place      = 1 << frozen_shift;
+  static const uintptr_t larval_mask              = right_n_bits(larval_bits);
+  static const uintptr_t larval_mask_in_place     = (larval_mask << larval_shift);
+  static const uintptr_t larval_bit_in_place      = 1 << larval_shift;
 
   static const uintptr_t hash_mask                = right_n_bits(hash_bits);
   static const uintptr_t hash_mask_in_place       = hash_mask << hash_shift;
@@ -164,6 +190,8 @@ class markWord {
   static const uintptr_t monitor_value            = 2;
   static const uintptr_t marked_value             = 3;
   static const uintptr_t biased_lock_pattern      = 5;
+  static const uintptr_t frozen_value             = frozen_bit_in_place;
+  static const uintptr_t larval_value             = larval_bit_in_place;
 
   static const uintptr_t no_hash                  = 0 ;  // no hash value assigned
   static const uintptr_t no_hash_in_place         = (address_word)no_hash << hash_shift;
@@ -336,6 +364,26 @@ class markWord {
 
   bool has_no_hash() const {
     return hash() == no_hash;
+  }
+
+  // frozen array operations
+  markWord enter_larval_state() const {
+    return markWord(value() | larval_bit_in_place);
+  }
+  markWord exit_larval_state() const {
+    return markWord(value() & ~larval_bit_in_place);
+  }
+  bool is_larval_state() const {
+    return (mask_bits(value(), larval_mask_in_place) == larval_value);
+  }
+
+  markWord set_frozen()   {
+    assert(!is_larval_state(), "must not be in larval state");
+    return markWord(value() | frozen_bit_in_place);
+  }
+
+  bool is_frozen() const {
+    return (mask_bits(value(), frozen_mask_in_place) == frozen_value);
   }
 
   // Prototype mark for initialization

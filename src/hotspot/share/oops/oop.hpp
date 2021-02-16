@@ -102,12 +102,14 @@ class oopDesc {
   inline bool is_array()               const;
   inline bool is_objArray()            const;
   inline bool is_typeArray()           const;
+  inline bool is_frozen_array()        const;
 
   // type test operations that don't require inclusion of oop.inline.hpp.
   bool is_instance_noinline()          const;
   bool is_array_noinline()             const;
   bool is_objArray_noinline()          const;
   bool is_typeArray_noinline()         const;
+  bool is_frozen_array_noinline()      const;
 
  protected:
   inline oop        as_oop() const { return const_cast<oopDesc*>(this); }

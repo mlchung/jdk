@@ -39,6 +39,8 @@
   static void index_check(Register array, Register index);
   static void index_check_without_pop(Register array, Register index);
 
+  static void store_array_element_check(Register array, Register index);
+
   static void putfield_or_static_helper(int byte_no, bool is_static, RewriteControl rc,
                                         Register obj, Register off, Register flags);
   static void fast_storefield_helper(Address field, Register rax);

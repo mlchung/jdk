@@ -26,6 +26,7 @@
 package java.lang.invoke;
 
 import jdk.internal.perf.PerfCounter;
+import jdk.internal.util.FrozenArrays;
 import jdk.internal.vm.annotation.DontInline;
 import jdk.internal.vm.annotation.Hidden;
 import jdk.internal.vm.annotation.Stable;
@@ -145,7 +146,7 @@ class LambdaForm {
         V_TYPE('V', void.class,   Wrapper.VOID);    // not valid in all contexts
 
         static final @Stable BasicType[] ALL_TYPES = BasicType.values();
-        static final @Stable BasicType[] ARG_TYPES = Arrays.copyOf(ALL_TYPES, ALL_TYPES.length-1);
+        static final @Stable BasicType[] ARG_TYPES = FrozenArrays.copyOf(ALL_TYPES, ALL_TYPES.length-1);
 
         static final int ARG_TYPE_LIMIT = ARG_TYPES.length;
         static final int TYPE_LIMIT = ALL_TYPES.length;

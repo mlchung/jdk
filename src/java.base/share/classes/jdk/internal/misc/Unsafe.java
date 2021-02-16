@@ -3744,6 +3744,49 @@ public final class Unsafe {
         putCharUnaligned(o, offset, convEndian(bigEndian, x));
     }
 
+    /**
+     * Returns true if the given object is a frozen array.
+     * The reference must be non-null and to an array.
+     */
+    public native boolean isFrozenArray(Object array);
+
+    /**
+     * Freeze the given array object.
+     * The reference must be non-null and to an array
+     * created by {@code makeLarvalArray} and
+     * which has not yet been frozen.
+     * The returned object is the same as the input
+     * array, which has been frozen, or perhaps a copy
+     * with the same type and contents.
+     *
+     * The input array must not be used an any way
+     * (whether loads, stores, re-freezing, or anything
+     * else) after the call returns.  User should
+     * Operations on the returned object must proceed as
+     * if it were a fresh copy of the input array, even if
+     * (as is likely in many cases but not all) the JVM
+     * manages to recycle the object identity of the input array.
+     *
+     * The user must not rely on the JVM to actually check these
+     * restrictions, which is why this method is unsafe.
+     *
+     * JIT IR representations should treat the input and output
+     * values as distinct names.
+     */
+    public native Object freezeLarvalArray(Object array);
+
+    /**
+     * Create a new array of the given class and length,
+     * with all elements initialized to their default values.
+     * This array must not made visible to other threads,
+     * or synchronized on.  It may be passed as an input
+     * to {@code freezeLarvalArray}.
+     *
+     * The user must not rely on the JVM to actually check these
+     * restrictions, which is why this method is unsafe.
+     */
+    public native Object makeLarvalArray(Class<?> arrayClass, int length);
+
     private static int pickPos(int top, int pos) { return BIG_ENDIAN ? top - pos : pos; }
 
     // These methods construct integers from bytes.  The byte ordering
@@ -3837,8 +3880,6 @@ public final class Unsafe {
     private static short convEndian(boolean big, short n) { return big == BIG_ENDIAN ? n : Short.reverseBytes(n)    ; }
     private static int convEndian(boolean big, int n)     { return big == BIG_ENDIAN ? n : Integer.reverseBytes(n)  ; }
     private static long convEndian(boolean big, long n)   { return big == BIG_ENDIAN ? n : Long.reverseBytes(n)     ; }
-
-
 
     private native long allocateMemory0(long bytes);
     private native long reallocateMemory0(long address, long bytes);

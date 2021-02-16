@@ -25,6 +25,7 @@
 
 package java.lang.invoke;
 
+import jdk.internal.util.FrozenArrays;
 import jdk.internal.vm.annotation.DontInline;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.annotation.Hidden;
@@ -627,7 +628,15 @@ class Invokers {
         NF_directVarHandleTarget = 6,
         NF_LIMIT = 7;
 
-    private static final @Stable NamedFunction[] NFS = new NamedFunction[NF_LIMIT];
+    private static final @Stable NamedFunction[] NFS = initNamedFunctions();
+
+    private static final NamedFunction[] initNamedFunctions() {
+        FrozenArrays.Builder<NamedFunction> builder = new FrozenArrays.Builder<>(NamedFunction[].class, NF_LIMIT);
+        for (byte func=0; func < NF_LIMIT; func++) {
+            builder.set(func, getFunction(func));
+        }
+        return builder.build();
+    }
 
     private static NamedFunction getFunction(byte func) {
         NamedFunction nf = NFS[func];

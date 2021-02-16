@@ -29,6 +29,7 @@ import java.lang.invoke.MethodHandleInfo;
 import java.util.OptionalInt;
 import java.util.stream.Stream;
 
+import jdk.internal.util.FrozenArrays;
 import jdk.internal.vm.annotation.Stable;
 
 import static java.lang.invoke.MethodHandleInfo.REF_getField;
@@ -162,19 +163,19 @@ public interface DirectMethodHandleDesc extends MethodHandleDesc {
             for (Kind k : values())
                 max = Math.max(max, tableIndex(k.refKind, true));
 
-            TABLE = new Kind[max+1];
+            Kind[] table = new Kind[max+1];
             for (Kind kind : values()) {
                 int i = tableIndex(kind.refKind, kind.isInterface);
-                if (i >= TABLE.length || TABLE[i] != null)
+                if (i >= table.length || table[i] != null)
                     throw new AssertionError("TABLE entry for " + kind);
-                TABLE[i] = kind;
+                table[i] = kind;
             }
 
             // Pack in some aliases also.
             int ii = tableIndex(REF_invokeInterface, false);
-            if (TABLE[ii] != null)
-                throw new AssertionError("TABLE entry for (invokeInterface, false) used by " + TABLE[ii]);
-            TABLE[ii] = INTERFACE_VIRTUAL;
+            if (table[ii] != null)
+                throw new AssertionError("TABLE entry for (invokeInterface, false) used by " + table[ii]);
+            table[ii] = INTERFACE_VIRTUAL;
 
             for (Kind kind : values()) {
                 if (!kind.isInterface) {
@@ -182,13 +183,14 @@ public interface DirectMethodHandleDesc extends MethodHandleDesc {
                     // For example, (REF_getStatic, X) will produce STATIC_GETTER
                     // for either truth value of X.
                     int i = tableIndex(kind.refKind, true);
-                    if (TABLE[i] == null) {
+                    if (table[i] == null) {
                         // There is not a specific Kind for interfaces
                         if (kind == VIRTUAL)  kind = INTERFACE_VIRTUAL;
-                        if (TABLE[i] == null)  TABLE[i] = kind;
+                        if (table[i] == null)  table[i] = kind;
                     }
                 }
             }
+            TABLE = (Kind[]) FrozenArrays.freeze(table);
         }
 
         /**

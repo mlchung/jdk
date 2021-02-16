@@ -104,6 +104,7 @@ public:
   virtual bool is_method_handle()     const { return false; }
   virtual bool is_method_type()       const { return false; }
   virtual bool is_array()                   { return false; }
+  virtual bool is_frozen_array()            { return false; }
   virtual bool is_obj_array()               { return false; }
   virtual bool is_type_array()              { return false; }
   virtual bool is_native_entry_point()const { return false; }

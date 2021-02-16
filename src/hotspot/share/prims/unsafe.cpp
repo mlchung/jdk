@@ -33,6 +33,7 @@
 #include "classfile/vmSymbols.hpp"
 #include "jfr/jfrEvents.hpp"
 #include "memory/allocation.inline.hpp"
+#include "memory/oopFactory.hpp"
 #include "memory/resourceArea.hpp"
 #include "oops/access.inline.hpp"
 #include "oops/fieldStreams.inline.hpp"
@@ -1044,6 +1045,39 @@ UNSAFE_ENTRY(jint, Unsafe_GetLoadAverage0(JNIEnv *env, jobject unsafe, jdoubleAr
   return ret;
 } UNSAFE_END
 
+UNSAFE_ENTRY(jboolean, Unsafe_IsFrozenArray(JNIEnv *env, jobject unsafe, jobject obj)) {
+  oop array = JNIHandles::resolve_non_null(obj);  return array->is_frozen_array();
+} UNSAFE_END
+
+UNSAFE_ENTRY(jobject, Unsafe_MakeLarvalArray(JNIEnv *env, jobject unsafe, jclass arrayClass, jint len)) {
+  Klass* array_type = java_lang_Class::as_Klass(JNIHandles::resolve_non_null(arrayClass));
+  if (!array_type->is_array_klass()) {
+    return NULL;
+  }
+  oop result;
+  if (array_type->is_typeArray_klass()) {
+    BasicType element_type = TypeArrayKlass::cast(array_type)->element_type();
+    result = oopFactory::new_typeArray(element_type, len, CHECK_NULL);
+  } else if (array_type->is_objArray_klass()) {
+    Klass* element_type = ObjArrayKlass::cast(array_type)->element_klass();
+    result = oopFactory::new_objArray(element_type, len, CHECK_NULL);
+  }
+  result->set_mark(result->mark().enter_larval_state());
+  return JNIHandles::make_local(THREAD, result);
+} UNSAFE_END
+
+UNSAFE_ENTRY(jobject, Unsafe_FreezeLarvalArray(JNIEnv *env, jobject unsafe, jobject obj)) {
+  oop array = JNIHandles::resolve_non_null(obj);
+  if (array->is_frozen_array()) {
+    return JNIHandles::make_local(THREAD, array);
+  } else if (array->is_array() && array->mark().is_larval_state()) {
+    array->set_mark(array->mark().exit_larval_state().set_frozen());
+    return JNIHandles::make_local(THREAD, array);
+  }
+  tty->print_cr("array %d larval %d", array->is_array(), array->mark().is_larval_state());
+  ShouldNotReachHere();
+  return NULL;
+} UNSAFE_END
 
 /// JVM_RegisterUnsafeMethods
 
@@ -1127,6 +1161,10 @@ static JNINativeMethod jdk_internal_misc_Unsafe_methods[] = {
     {CC "loadFence",          CC "()V",                  FN_PTR(Unsafe_LoadFence)},
     {CC "storeFence",         CC "()V",                  FN_PTR(Unsafe_StoreFence)},
     {CC "fullFence",          CC "()V",                  FN_PTR(Unsafe_FullFence)},
+
+    {CC "isFrozenArray",      CC "(" OBJ ")Z",           FN_PTR(Unsafe_IsFrozenArray)},
+    {CC "freezeLarvalArray",  CC "(" OBJ ")" OBJ,        FN_PTR(Unsafe_FreezeLarvalArray)},
+    {CC "makeLarvalArray",    CC "(" CLS "I)" OBJ,       FN_PTR(Unsafe_MakeLarvalArray)},
 };
 
 #undef CC

@@ -39,6 +39,8 @@ import java.util.function.UnaryOperator;
 import jdk.internal.access.JavaUtilCollectionAccess;
 import jdk.internal.access.SharedSecrets;
 import jdk.internal.misc.CDS;
+import jdk.internal.misc.Unsafe;
+import jdk.internal.util.FrozenArrays;
 import jdk.internal.vm.annotation.Stable;
 
 /**
@@ -85,6 +87,8 @@ class ImmutableCollections {
         // use the lowest bit to determine if we should reverse iteration
         REVERSE = (SALT32L & 1) == 0;
     }
+
+    private static final Unsafe UNSAFE = Unsafe.getUnsafe();
 
     /**
      * Constants following this might be initialized from the CDS archive via
@@ -184,12 +188,12 @@ class ImmutableCollections {
     @SafeVarargs
     static <E> List<E> listFromArray(E... input) {
         // copy and check manually to avoid TOCTOU
-        @SuppressWarnings("unchecked")
-        E[] tmp = (E[])new Object[input.length]; // implicit nullcheck of input
+        FrozenArrays.Builder<E> builder = new FrozenArrays.Builder<>(Object[].class, input.length);
+        // implicit nullcheck of input
         for (int i = 0; i < input.length; i++) {
-            tmp[i] = Objects.requireNonNull(input[i]);
+            builder.set(i, Objects.requireNonNull(input[i]));
         }
-        return new ListN<>(tmp, false);
+        return new ListN<>(builder.build(), false);
     }
 
     /**
@@ -910,15 +914,22 @@ class ImmutableCollections {
         SetN(E... input) {
             size = input.length; // implicit nullcheck of input
 
-            elements = (E[])new Object[EXPAND_FACTOR * input.length];
-            for (int i = 0; i < input.length; i++) {
-                E e = input[i];
-                int idx = probe(e); // implicit nullcheck of e
-                if (idx >= 0) {
-                    throw new IllegalArgumentException("duplicate element: " + e);
-                } else {
-                    elements[-(idx + 1)] = e;
+            if (size == 0) {
+                elements = (E[]) new Object[0];
+            } else {
+                FrozenArrays.Builder<E> builder = new FrozenArrays.Builder<>(Object[].class, EXPAND_FACTOR * input.length);
+                // the array is referenced while its elements are filled
+                elements = builder.larvalArray();
+                for (int i = 0; i < input.length; i++) {
+                    E e = input[i];
+                    int idx = probe(e); // implicit nullcheck of e
+                    if (idx >= 0) {
+                        throw new IllegalArgumentException("duplicate element: " + e);
+                    } else {
+                        builder.set(-(idx + 1), e);
+                    }
                 }
+                builder.build();
             }
         }
 
@@ -1177,21 +1188,27 @@ class ImmutableCollections {
 
             int len = EXPAND_FACTOR * input.length;
             len = (len + 1) & ~1; // ensure table is even length
-            table = new Object[len];
-
-            for (int i = 0; i < input.length; i += 2) {
-                @SuppressWarnings("unchecked")
-                    K k = Objects.requireNonNull((K)input[i]);
-                @SuppressWarnings("unchecked")
-                    V v = Objects.requireNonNull((V)input[i+1]);
-                int idx = probe(k);
-                if (idx >= 0) {
-                    throw new IllegalArgumentException("duplicate key: " + k);
-                } else {
-                    int dest = -(idx + 1);
-                    table[dest] = k;
-                    table[dest+1] = v;
+            if (len == 0) {
+                table = new Object[len];
+            } else {
+                FrozenArrays.Builder<Object> builder = new FrozenArrays.Builder<>(Object[].class, len);
+                // the array is referenced while its elements are filled
+                table = builder.larvalArray();
+                for (int i = 0; i < input.length; i += 2) {
+                    @SuppressWarnings("unchecked")
+                    K k = Objects.requireNonNull((K) input[i]);
+                    @SuppressWarnings("unchecked")
+                    V v = Objects.requireNonNull((V) input[i + 1]);
+                    int idx = probe(k);
+                    if (idx >= 0) {
+                        throw new IllegalArgumentException("duplicate key: " + k);
+                    } else {
+                        int dest = -(idx + 1);
+                        builder.set(dest, k);
+                        builder.set(dest + 1, v);
+                    }
                 }
+                builder.build();
             }
         }
 

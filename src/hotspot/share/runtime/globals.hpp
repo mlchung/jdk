@@ -1932,6 +1932,9 @@ const intx ObjectAlignmentInBytes = 8;
   product(bool, FoldStableValues, true, DIAGNOSTIC,                         \
           "Optimize loads from stable fields (marked w/ @Stable)")          \
                                                                             \
+  product(bool, FoldFrozenArrays, true, DIAGNOSTIC,                         \
+          "Optimize loads from frozen arrays")                              \
+                                                                            \
   product(int, UseBootstrapCallInfo, 1, DIAGNOSTIC,                         \
           "0: when resolving InDy or ConDy, force all BSM arguments to be " \
           "resolved before the bootstrap method is called; 1: when a BSM "  \

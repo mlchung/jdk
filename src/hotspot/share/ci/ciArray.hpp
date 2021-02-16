@@ -39,10 +39,11 @@
 class ciArray : public ciObject {
 private:
   int _length;
+  bool _frozen;
 
 protected:
-  ciArray( objArrayHandle h_a) : ciObject(h_a), _length(h_a()->length()) {}
-  ciArray(typeArrayHandle h_a) : ciObject(h_a), _length(h_a()->length()) {}
+  ciArray( objArrayHandle h_a) : ciObject(h_a), _length(h_a()->length()), _frozen(h_a()->is_frozen_array_noinline()) {}
+  ciArray(typeArrayHandle h_a) : ciObject(h_a), _length(h_a()->length()), _frozen(h_a()->is_frozen_array_noinline()) {}
 
   arrayOop get_arrayOop() const { return (arrayOop)get_oop(); }
 
@@ -69,7 +70,9 @@ public:
   ciConstant element_value_by_offset(intptr_t element_offset);
 
   // What kind of ciObject is this?
-  bool is_array()        { return true; }
+  bool is_array()                   { return true; }
+  bool is_frozen_array()            { return _frozen; }
+
 };
 
 #endif // SHARE_CI_CIARRAY_HPP
