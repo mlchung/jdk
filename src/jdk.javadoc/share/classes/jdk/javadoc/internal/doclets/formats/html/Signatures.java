@@ -1,3 +1,28 @@
+/*
+ * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
+
 package jdk.javadoc.internal.doclets.formats.html;
 
 import jdk.javadoc.doclet.DocletEnvironment;
@@ -49,6 +74,9 @@ public class Signatures {
     }
 
     public static Content getPackageSignature(PackageElement pkg, PackageWriterImpl pkgWriter) {
+        if (pkg.isUnnamed()) {
+            return new StringContent();
+        }
         Content signature = HtmlTree.DIV(HtmlStyle.packageSignature);
         Content annotations = pkgWriter.getAnnotationInfo(pkg, true);
         if (!annotations.isEmpty()) {
@@ -97,8 +125,8 @@ public class Signatures {
             } else {
                 nameSpan.addStyle(HtmlStyle.typeNameLabel).add(className);
             }
-            LinkInfoImpl linkInfo = new LinkInfoImpl(configuration,
-                    LinkInfoImpl.Kind.CLASS_SIGNATURE, typeElement);
+            HtmlLinkInfo linkInfo = new HtmlLinkInfo(configuration,
+                    HtmlLinkInfo.Kind.CLASS_SIGNATURE, typeElement);
             //Let's not link to ourselves in the signature.
             linkInfo.linkToSelf = false;
             nameSpan.add(classWriter.getTypeParameterLinks(linkInfo));
@@ -115,8 +143,8 @@ public class Signatures {
                     if (superclass != null) {
                         content.add(DocletConstants.NL);
                         extendsImplements.add("extends ");
-                        Content link = classWriter.getLink(new LinkInfoImpl(configuration,
-                                LinkInfoImpl.Kind.CLASS_SIGNATURE_PARENT_NAME,
+                        Content link = classWriter.getLink(new HtmlLinkInfo(configuration,
+                                HtmlLinkInfo.Kind.CLASS_SIGNATURE_PARENT_NAME,
                                 superclass));
                         extendsImplements.add(link);
                     }
@@ -136,8 +164,8 @@ public class Signatures {
                         } else {
                             extendsImplements.add(", ");
                         }
-                        Content link = classWriter.getLink(new LinkInfoImpl(configuration,
-                                LinkInfoImpl.Kind.CLASS_SIGNATURE_PARENT_NAME,
+                        Content link = classWriter.getLink(new HtmlLinkInfo(configuration,
+                                HtmlLinkInfo.Kind.CLASS_SIGNATURE_PARENT_NAME,
                                 type));
                         extendsImplements.add(link);
                     }
@@ -166,8 +194,8 @@ public class Signatures {
                     } else {
                         permitsSpan.add(", ");
                     }
-                    Content link = classWriter.getLink(new LinkInfoImpl(configuration,
-                            LinkInfoImpl.Kind.PERMITTED_SUBCLASSES,
+                    Content link = classWriter.getLink(new HtmlLinkInfo(configuration,
+                            HtmlLinkInfo.Kind.PERMITTED_SUBCLASSES,
                             type));
                     permitsSpan.add(link);
                 }
@@ -190,7 +218,7 @@ public class Signatures {
                 content.add(sep);
                 classWriter.getAnnotations(e.getAnnotationMirrors(), false)
                         .forEach(a -> { content.add(a).add(" "); });
-                Content link = classWriter.getLink(new LinkInfoImpl(configuration, LinkInfoImpl.Kind.RECORD_COMPONENT,
+                Content link = classWriter.getLink(new HtmlLinkInfo(configuration, HtmlLinkInfo.Kind.RECORD_COMPONENT,
                         e.asType()));
                 content.add(link);
                 content.add(Entity.NO_BREAK_SPACE);
@@ -265,7 +293,7 @@ public class Signatures {
          * @return this instance
          */
         MemberSignature setType(TypeMirror type) {
-            this.returnType = memberWriter.writer.getLink(new LinkInfoImpl(memberWriter.configuration, LinkInfoImpl.Kind.MEMBER, type));
+            this.returnType = memberWriter.writer.getLink(new HtmlLinkInfo(memberWriter.configuration, HtmlLinkInfo.Kind.MEMBER, type));
             return this;
         }
 

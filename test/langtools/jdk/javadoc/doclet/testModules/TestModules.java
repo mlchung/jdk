@@ -543,7 +543,7 @@ public class TestModules extends JavadocTester {
         checkOutput("moduleA/module-summary.html", found,
                 """
                     <div class="header">
-                    <h1 title="Module" class="title">Module&nbsp;moduleA</h1>
+                    <h1 title="Module moduleA" class="title">Module moduleA</h1>
                     </div>
                     <hr>
                     <div class="module-signature"><span class="annotations">@Deprecated(forRemoval=true)
@@ -556,7 +556,7 @@ public class TestModules extends JavadocTester {
         checkOutput("moduleB/module-summary.html", found,
                 """
                     <div class="header">
-                    <h1 title="Module" class="title">Module&nbsp;moduleB</h1>
+                    <h1 title="Module moduleB" class="title">Module moduleB</h1>
                     </div>
                     <hr>
                     <div class="module-signature"><span class="annotations"><a href="testpkgmdlB/Ann\
@@ -783,7 +783,7 @@ public class TestModules extends JavadocTester {
         checkOutput("moduleT/module-summary.html", true,
                 """
                     <div class="header">
-                    <h1 title="Module" class="title">Module&nbsp;moduleT</h1>
+                    <h1 title="Module moduleT" class="title">Module moduleT</h1>
                     </div>""",
                 """
                     <div class="block">This is a test description for the moduleT module. Search phr\
@@ -848,20 +848,20 @@ public class TestModules extends JavadocTester {
                     </dl>""",
                 """
                     <dl class="index">
-                    <dt><span class="search-tag-link"><a href="moduleB/module-summary.html#search_wo\
-                    rd">search_word</a></span> - Search tag in module moduleB</dt>
+                    <dt><a href="moduleB/module-summary.html#search_word" class="search-tag-link">se\
+                    arch_word</a> - Search tag in module moduleB</dt>
                     <dd>&nbsp;</dd>
-                    <dt><span class="search-tag-link"><a href="moduleA/module-summary.html#searchphr\
-                    ase">search phrase</a></span> - Search tag in module moduleA</dt>
+                    <dt><a href="moduleA/module-summary.html#searchphrase" class="search-tag-link">s\
+                    earch phrase</a> - Search tag in module moduleA</dt>
                     <dd>with description</dd>
                     </dl>""");
         checkOutput("index-all.html", false,
                 """
-                    <dt><span class="search-tag-link"><a href="moduleA/module-summary.html#searchphr\
-                    ase">search phrase</a></span> - Search tag in module moduleA</dt>
+                    <dt><a href="moduleA/module-summary.html#searchphrase" class="search-tag-link">s\
+                    earch phrase</a> - Search tag in module moduleA</dt>
                     <dd>with description</dd>
-                    <dt><span class="search-tag-link"><a href="moduleA/module-summary.html#searchphr\
-                    ase">search phrase</a></span> - Search tag in module moduleA</dt>
+                    <dt><a href="moduleA/module-summary.html#searchphrase" class="search-tag-link">s\
+                    earch phrase</a></span> - Search tag in module moduleA</dt>
                     <dd>with description</dd>""");
     }
 
@@ -1103,7 +1103,7 @@ public class TestModules extends JavadocTester {
         checkOutput("moduletags/module-summary.html", found,
                 """
                     <div class="header">
-                    <h1 title="Module" class="title">Module&nbsp;moduletags</h1>
+                    <h1 title="Module moduletags" class="title">Module moduletags</h1>
                     </div>
                     <hr>
                     <div class="module-signature"><span class="annotations">@Deprecated
@@ -1116,7 +1116,7 @@ public class TestModules extends JavadocTester {
         checkOutput("moduleB/module-summary.html", true,
                 """
                     <div class="header">
-                    <h1 title="Module" class="title">Module&nbsp;moduleB</h1>
+                    <h1 title="Module moduleB" class="title">Module moduleB</h1>
                     </div>
                     <hr>
                     <div class="module-signature"><span class="annotations"><a href="testpkgmdlB/Ann\
@@ -1282,7 +1282,7 @@ public class TestModules extends JavadocTester {
         checkOutput("test.moduleFullName/module-summary.html", found,
                 """
                     <div class="header">
-                    <h1 title="Module" class="title">Module&nbsp;test.moduleFullName</h1>
+                    <h1 title="Module test.moduleFullName" class="title">Module test.moduleFullName</h1>
                     </div>""");
         checkOutput("index-all.html", found,
                 """
@@ -1295,7 +1295,7 @@ public class TestModules extends JavadocTester {
         checkOutput("test.moduleFullName/module-summary.html", !found,
                 """
                     <div class="header">
-                    <h1 title="Module" class="title">Module&nbsp;moduleFullName</h1>
+                    <h1 title="Module moduleFullName" class="title">Module moduleFullName</h1>
                     </div>""");
         checkOutput("index-all.html", !found,
                 """
