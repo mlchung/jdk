@@ -39,7 +39,6 @@ import java.util.function.UnaryOperator;
 import jdk.internal.access.JavaUtilCollectionAccess;
 import jdk.internal.access.SharedSecrets;
 import jdk.internal.misc.CDS;
-import jdk.internal.misc.Unsafe;
 import jdk.internal.util.FrozenArrays;
 import jdk.internal.vm.annotation.Stable;
 
@@ -87,8 +86,6 @@ class ImmutableCollections {
         // use the lowest bit to determine if we should reverse iteration
         REVERSE = (SALT32L & 1) == 0;
     }
-
-    private static final Unsafe UNSAFE = Unsafe.getUnsafe();
 
     /**
      * Constants following this might be initialized from the CDS archive via
@@ -629,11 +626,9 @@ class ImmutableCollections {
 
         @Override
         public Object[] toArray() {
-            if (e1 == EMPTY) {
-                return new Object[] { e0 };
-            } else {
-                return new Object[] { e0, e1 };
-            }
+            // ## I think it's a reasonable proposeal to make a spec change on
+            // unmodifiable list to return a frozen array.
+            return (Object[]) frozenArray(Object[].class);
         }
 
         @Override
@@ -651,6 +646,15 @@ class ImmutableCollections {
             }
             return array;
         }
+
+        private Object frozenArray(Class<?> arrayType) {
+            FrozenArrays.Builder<Object> builder = new FrozenArrays.Builder<>(arrayType, size());
+            builder.set(0, e0);
+            if (e1 != EMPTY) {
+                builder.set(1, e1);
+            }
+            return builder.build();
+        }
     }
 
     @jdk.internal.ValueBased
@@ -664,8 +668,9 @@ class ImmutableCollections {
         private final boolean allowNulls;
 
         // caller must ensure that elements has no nulls if allowNulls is false
+        @SuppressWarnings("unchecked")
         private ListN(E[] elements, boolean allowNulls) {
-            this.elements = elements;
+            this.elements = FrozenArrays.freeze(elements);
             this.allowNulls = allowNulls;
         }
 
@@ -696,7 +701,9 @@ class ImmutableCollections {
 
         @Override
         public Object[] toArray() {
-            return Arrays.copyOf(elements, elements.length);
+            // ## it's reasonable to make a spec change to return a frozen array
+            // It may be useful to have a new method to return T[] instead Object[]
+            return elements;
         }
 
         @Override
@@ -705,7 +712,7 @@ class ImmutableCollections {
             int size = elements.length;
             if (a.length < size) {
                 // Make a new array of a's runtime type, but my contents:
-                return (T[]) Arrays.copyOf(elements, size, a.getClass());
+                return (T[]) FrozenArrays.freeze(elements, size, a.getClass());
             }
             System.arraycopy(elements, 0, a, 0, size);
             if (a.length > size) {
@@ -914,23 +921,24 @@ class ImmutableCollections {
         SetN(E... input) {
             size = input.length; // implicit nullcheck of input
 
+            E[] elements;
             if (size == 0) {
                 elements = (E[]) new Object[0];
             } else {
-                FrozenArrays.Builder<E> builder = new FrozenArrays.Builder<>(Object[].class, EXPAND_FACTOR * input.length);
-                // the array is referenced while its elements are filled
-                elements = builder.larvalArray();
+                elements = (E[])new Object[EXPAND_FACTOR * input.length];
                 for (int i = 0; i < input.length; i++) {
                     E e = input[i];
-                    int idx = probe(e); // implicit nullcheck of e
+                    int idx = probe(e, elements); // implicit nullcheck of e
                     if (idx >= 0) {
                         throw new IllegalArgumentException("duplicate element: " + e);
                     } else {
-                        builder.set(-(idx + 1), e);
+                        elements[-(idx + 1)] = e;
                     }
                 }
-                builder.build();
             }
+            // The initialization of the elements array reads the partially filled array
+            // content.  The Builder API is not suitable for this.
+            this.elements = FrozenArrays.freeze(elements);
         }
 
         @Override
@@ -1014,7 +1022,7 @@ class ImmutableCollections {
         // (-i - 1) where i is location where element should be inserted.
         // Callers are relying on this method to perform an implicit nullcheck
         // of pe
-        private int probe(Object pe) {
+        private int probe(Object pe, E[] elements) {
             int idx = Math.floorMod(pe.hashCode(), elements.length);
             while (true) {
                 E ee = elements[idx];
@@ -1026,6 +1034,9 @@ class ImmutableCollections {
                     idx = 0;
                 }
             }
+        }
+        private int probe(Object pe) {
+            return probe(pe, elements);
         }
 
         @java.io.Serial
@@ -1188,28 +1199,24 @@ class ImmutableCollections {
 
             int len = EXPAND_FACTOR * input.length;
             len = (len + 1) & ~1; // ensure table is even length
-            if (len == 0) {
-                table = new Object[len];
-            } else {
-                FrozenArrays.Builder<Object> builder = new FrozenArrays.Builder<>(Object[].class, len);
-                // the array is referenced while its elements are filled
-                table = builder.larvalArray();
-                for (int i = 0; i < input.length; i += 2) {
-                    @SuppressWarnings("unchecked")
-                    K k = Objects.requireNonNull((K) input[i]);
-                    @SuppressWarnings("unchecked")
-                    V v = Objects.requireNonNull((V) input[i + 1]);
-                    int idx = probe(k);
-                    if (idx >= 0) {
-                        throw new IllegalArgumentException("duplicate key: " + k);
-                    } else {
-                        int dest = -(idx + 1);
-                        builder.set(dest, k);
-                        builder.set(dest + 1, v);
-                    }
+            Object[] table = new Object[len];
+            for (int i = 0; i < input.length; i += 2) {
+                @SuppressWarnings("unchecked")
+                K k = Objects.requireNonNull((K) input[i]);
+                @SuppressWarnings("unchecked")
+                V v = Objects.requireNonNull((V) input[i + 1]);
+                int idx = probe(k, table);
+                if (idx >= 0) {
+                    throw new IllegalArgumentException("duplicate key: " + k);
+                } else {
+                    int dest = -(idx + 1);
+                    table[dest] = k;
+                    table[dest + 1] = v;
                 }
-                builder.build();
             }
+            // The initialization of the table array reads the partially filled array
+            // content.  The Builder API is not suitable for this.
+            this.table = FrozenArrays.freeze(table);
         }
 
         @Override
@@ -1334,7 +1341,7 @@ class ImmutableCollections {
         // (-i - 1) where i is location where element should be inserted.
         // Callers are relying on this method to perform an implicit nullcheck
         // of pk.
-        private int probe(Object pk) {
+        private int probe(Object pk, Object[] table) {
             int idx = Math.floorMod(pk.hashCode(), table.length >> 1) << 1;
             while (true) {
                 @SuppressWarnings("unchecked")
@@ -1347,6 +1354,9 @@ class ImmutableCollections {
                     idx = 0;
                 }
             }
+        }
+        private int probe(Object pk) {
+            return probe(pk, table);
         }
 
         @java.io.Serial

@@ -314,10 +314,12 @@ abstract class MethodHandleImpl {
             if (convCount == 0) {
                 midType = srcType;
             } else {
-                Class<?>[] ptypes = midType.ptypes().clone();
+                FrozenArrays.Builder<Class<?>> builder = new FrozenArrays.Builder<>(Class[].class, midType.parameterCount());
+                builder.copy(midType.ptypes());
                 for (int pos : positions) {
-                    ptypes[pos - 1] = newType;
+                    builder.set(pos - 1, newType);
                 }
+                Class<?>[] ptypes = builder.build();
                 midType = MethodType.makeImpl(midType.rtype(), ptypes, true);
             }
             LambdaForm form2;
@@ -1680,15 +1682,7 @@ abstract class MethodHandleImpl {
             NF_profileBoolean = 5,
             NF_LIMIT = 6;
 
-    private static final @Stable NamedFunction[] NFS = initNamedFunctions();
-
-    private static final NamedFunction[] initNamedFunctions() {
-        FrozenArrays.Builder<NamedFunction> builder = new FrozenArrays.Builder<>(NamedFunction[].class, NF_LIMIT);
-        for (byte func=0; func < NF_LIMIT; func++) {
-            builder.set(func, getFunction(func));
-        }
-        return builder.build();
-    }
+    private static final @Stable NamedFunction[] NFS = new NamedFunction[NF_LIMIT];
 
     static NamedFunction getFunction(byte func) {
         NamedFunction nf = NFS[func];

@@ -190,7 +190,13 @@ public interface DirectMethodHandleDesc extends MethodHandleDesc {
                     }
                 }
             }
-            TABLE = (Kind[]) FrozenArrays.freeze(table);
+            /*
+             * TODO: can FrozenArrays::freeze detect if the given array is within the
+             * local scope and make the given array frozen-in-place?
+             *
+             * Instead of using the FrozenArrays.Builder API
+             */
+            TABLE = FrozenArrays.freeze(table);
         }
 
         /**

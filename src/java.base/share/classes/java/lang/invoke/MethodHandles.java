@@ -34,6 +34,7 @@ import jdk.internal.org.objectweb.asm.Opcodes;
 import jdk.internal.org.objectweb.asm.Type;
 import jdk.internal.reflect.CallerSensitive;
 import jdk.internal.reflect.Reflection;
+import jdk.internal.util.FrozenArrays;
 import jdk.internal.vm.annotation.ForceInline;
 import sun.invoke.util.ValueConversions;
 import sun.invoke.util.VerifyAccess;
@@ -5571,10 +5572,12 @@ assertEquals("XY", (String) f2.invokeExact("x", "y")); // XY
         BoundMethodHandle result = adapter.rebind();
         Class<?> newParamType = filterType.parameterType(0);
 
-        Class<?>[] ptypes = targetType.ptypes().clone();
+        FrozenArrays.Builder<Class<?>> builder = new FrozenArrays.Builder<>(Class[].class, targetType.parameterCount());
+        builder.copy(targetType.ptypes());
         for (int pos : positions) {
-            ptypes[pos - 1] = newParamType;
+            builder.set(pos - 1, newParamType);
         }
+        Class<?>[] ptypes = builder.build();
         MethodType newType = MethodType.makeImpl(targetType.rtype(), ptypes, true);
 
         LambdaForm lform = result.editor().filterRepeatedArgumentForm(BasicType.basicType(newParamType), positions);

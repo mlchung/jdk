@@ -53,7 +53,7 @@ public class FrozenArrayTest {
     @Test
     public void testIntArray() {
         int[] values = new int[] { 1, 2, 3, 4, 5};
-        int[] result = (int[])FrozenArrays.freeze(values);
+        int[] result = FrozenArrays.freeze(values);
         assertTrue(FrozenArrays.isFrozen(result));
         assertEquals(result, values);
     }
@@ -86,7 +86,7 @@ public class FrozenArrayTest {
     @Test
     public void testMultiDimensionArray() {
         int[][] values = new int[][] { new int[] {1,2}, new int[] {2, 3, 4}, new int[] {}};
-        int[][] result = (int[][])FrozenArrays.freeze(values);
+        int[][] result = FrozenArrays.freeze(values);
         assertTrue(FrozenArrays.isFrozen(result));
         assertEquals(result, values);
         assertFalse(FrozenArrays.isFrozen(result[0]));
@@ -105,7 +105,7 @@ public class FrozenArrayTest {
     @Test(expectedExceptions = {ArrayStoreException.class})
     public void writeToFrozenArray() {
         Integer[] values = new Integer[] { 1, 2, 3};
-        Integer[] array = (Integer[])FrozenArrays.freeze(values);
+        Integer[] array = FrozenArrays.freeze(values);
         assertTrue(FrozenArrays.isFrozen(array));
         assertEquals(array, values);
 
@@ -117,7 +117,7 @@ public class FrozenArrayTest {
     @Test(expectedExceptions = {ArrayStoreException.class})
     public void writeToFrozenIntArray() {
         int[] values = new int[] { 1, 2, 3};
-        int[] array = (int[])FrozenArrays.freeze(values);
+        int[] array = FrozenArrays.freeze(values);
         assertTrue(FrozenArrays.isFrozen(array));
         assertEquals(array, values);
 

@@ -146,7 +146,7 @@ class LambdaForm {
         V_TYPE('V', void.class,   Wrapper.VOID);    // not valid in all contexts
 
         static final @Stable BasicType[] ALL_TYPES = BasicType.values();
-        static final @Stable BasicType[] ARG_TYPES = FrozenArrays.copyOf(ALL_TYPES, ALL_TYPES.length-1);
+        static final @Stable BasicType[] ARG_TYPES = FrozenArrays.freeze(ALL_TYPES, ALL_TYPES.length-1);
 
         static final int ARG_TYPE_LIMIT = ARG_TYPES.length;
         static final int TYPE_LIMIT = ALL_TYPES.length;
@@ -653,10 +653,11 @@ class LambdaForm {
 
     /** Return the method type corresponding to my basic type signature. */
     MethodType methodType() {
-        Class<?>[] ptypes = new Class<?>[arity];
+        FrozenArrays.Builder<Class<?>> builder = new FrozenArrays.Builder<>(Class[].class, arity);
         for (int i = 0; i < arity; ++i) {
-            ptypes[i] = parameterType(i).btClass;
+            builder.set(i, parameterType(i).btClass);
         }
+        Class<?>[] ptypes = builder.build();
         return MethodType.makeImpl(returnType().btClass, ptypes, true);
     }
 

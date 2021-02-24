@@ -3318,7 +3318,6 @@ static inline arrayOop check_array(JNIEnv *env, jobject arr, bool type_array_onl
   return arrayOop(a);
 }
 
-
 JVM_ENTRY(jint, JVM_GetArrayLength(JNIEnv *env, jobject arr))
   arrayOop a = check_array(env, arr, false, CHECK_0);
   return a->length();
@@ -3351,6 +3350,9 @@ JVM_END
 
 JVM_ENTRY(void, JVM_SetArrayElement(JNIEnv *env, jobject arr, jint index, jobject val))
   arrayOop a = check_array(env, arr, false, CHECK);
+  if (a->is_frozen_array()) {
+     THROW_MSG(vmSymbols::java_lang_ArrayStoreException(), "Argument is a frozen array");
+  }
   oop box = JNIHandles::resolve(val);
   jvalue value;
   value.i = 0; // to initialize value before getting used in CHECK
@@ -3367,6 +3369,9 @@ JVM_END
 
 JVM_ENTRY(void, JVM_SetPrimitiveArrayElement(JNIEnv *env, jobject arr, jint index, jvalue v, unsigned char vCode))
   arrayOop a = check_array(env, arr, true, CHECK);
+  if (a->is_frozen_array()) {
+     THROW_MSG(vmSymbols::java_lang_ArrayStoreException(), "Argument is a frozen array");
+  }
   assert(a->is_typeArray(), "just checking");
   BasicType value_type = (BasicType) vCode;
   Reflection::array_set(&v, a, index, value_type, CHECK);

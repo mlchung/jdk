@@ -97,13 +97,14 @@ jdk_lang = \
     sun/invoke \
     sun/misc \
     sun/reflect \
-    jdk/internal/reflect \
     jdk/lambda \
+    jdk/internal/jimage \
     jdk/internal/loader \
     jdk/internal/misc \
-    jdk/internal/ref \
-    jdk/internal/jimage \
     jdk/internal/math \
+    jdk/internal/ref \
+    jdk/internal/reflect \
+    jdk/internal/util \
     jdk/modules
 
 # All of the java.util package

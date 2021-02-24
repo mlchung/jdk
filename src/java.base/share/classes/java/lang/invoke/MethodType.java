@@ -42,6 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Stream;
 
+import jdk.internal.util.FrozenArrays;
 import jdk.internal.vm.annotation.Stable;
 import sun.invoke.util.BytecodeDescriptor;
 import sun.invoke.util.VerifyType;
@@ -50,7 +51,6 @@ import sun.security.util.SecurityConstants;
 
 import static java.lang.invoke.MethodHandleStatics.UNSAFE;
 import static java.lang.invoke.MethodHandleStatics.newIllegalArgumentException;
-import static java.lang.invoke.MethodType.fromDescriptor;
 
 /**
  * A method type represents the arguments and return type accepted and
@@ -281,9 +281,13 @@ class MethodType
      * @throws IllegalArgumentException if {@code ptype0} or {@code ptypes} or any element of {@code ptypes} is {@code void.class}
      */
     public static MethodType methodType(Class<?> rtype, Class<?> ptype0, Class<?>... ptypes) {
-        Class<?>[] ptypes1 = new Class<?>[1+ptypes.length];
-        ptypes1[0] = ptype0;
-        System.arraycopy(ptypes, 0, ptypes1, 1, ptypes.length);
+        int numParamTypes = 1+ptypes.length;
+        FrozenArrays.Builder<Class<?>> builder = new FrozenArrays.Builder<>(Class[].class, numParamTypes);
+        builder.set(0, ptype0);
+        for (int i = 0; i < ptypes.length; ++i) {
+            builder.set(i+1, ptypes[i]);
+        }
+        Class<?>[] ptypes1 = builder.build();
         return makeImpl(rtype, ptypes1, true);
     }
 
@@ -351,7 +355,7 @@ class MethodType
             mt = primordialMT;
         } else {
             // Make defensive copy then validate
-            ptypes = Arrays.copyOf(ptypes, ptypes.length);
+            ptypes = FrozenArrays.freeze(ptypes, ptypes.length);
             MethodType.checkPtypes(ptypes);
             mt = new MethodType(rtype, ptypes);
         }
@@ -620,12 +624,12 @@ class MethodType
                 nptypes = NO_PTYPES;
             } else {
                 // drop initial parameter(s)
-                nptypes = Arrays.copyOfRange(ptypes, end, len);
+                nptypes = FrozenArrays.freezeRange(ptypes, end, len);
             }
         } else {
             if (end == len) {
                 // drop trailing parameter(s)
-                nptypes = Arrays.copyOfRange(ptypes, 0, start);
+                nptypes = FrozenArrays.freezeRange(ptypes, 0, start);
             } else {
                 int tail = len - end;
                 nptypes = Arrays.copyOfRange(ptypes, 0, start + tail);

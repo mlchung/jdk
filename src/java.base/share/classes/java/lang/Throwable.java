@@ -25,6 +25,8 @@
 
 package java.lang;
 
+import jdk.internal.util.FrozenArrays;
+
 import java.io.*;
 import java.util.*;
 
@@ -823,12 +825,15 @@ public class Throwable implements Serializable {
      * {@code printStackTrace}.  Writes to the returned array do not
      * affect future calls to this method.
      *
+     * @apiNote
+     * Spec change: this method should return a frozen array.
+     *
      * @return an array of stack trace elements representing the stack trace
      *         pertaining to this throwable.
      * @since  1.4
      */
     public StackTraceElement[] getStackTrace() {
-        return getOurStackTrace().clone();
+        return getOurStackTrace();
     }
 
     private synchronized StackTraceElement[] getOurStackTrace() {
@@ -873,7 +878,7 @@ public class Throwable implements Serializable {
      */
     public void setStackTrace(StackTraceElement[] stackTrace) {
         // Validate argument
-        StackTraceElement[] defensiveCopy = stackTrace.clone();
+        StackTraceElement[] defensiveCopy = FrozenArrays.freeze(stackTrace);
         for (int i = 0; i < defensiveCopy.length; i++) {
             if (defensiveCopy[i] == null)
                 throw new NullPointerException("stackTrace[" + i + "]");

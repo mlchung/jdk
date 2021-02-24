@@ -29,6 +29,7 @@ import jdk.internal.loader.BuiltinClassLoader;
 import jdk.internal.misc.VM;
 import jdk.internal.module.ModuleHashes;
 import jdk.internal.module.ModuleReferenceImpl;
+import jdk.internal.util.FrozenArrays;
 
 import java.lang.module.ModuleDescriptor.Version;
 import java.lang.module.ModuleReference;
@@ -546,7 +547,7 @@ public final class StackTraceElement implements java.io.Serializable {
         for (StackTraceElement ste : stackTrace) {
             ste.computeFormat();
         }
-        return stackTrace;
+        return FrozenArrays.freeze(stackTrace);
     }
 
     /*
