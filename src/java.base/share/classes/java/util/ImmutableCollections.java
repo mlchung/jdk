@@ -39,6 +39,7 @@ import java.util.function.UnaryOperator;
 import jdk.internal.access.JavaUtilCollectionAccess;
 import jdk.internal.access.SharedSecrets;
 import jdk.internal.misc.CDS;
+import jdk.internal.util.ArrayBuilder;
 import jdk.internal.util.FrozenArrays;
 import jdk.internal.vm.annotation.Stable;
 
@@ -185,7 +186,7 @@ class ImmutableCollections {
     @SafeVarargs
     static <E> List<E> listFromArray(E... input) {
         // copy and check manually to avoid TOCTOU
-        FrozenArrays.Builder<E> builder = new FrozenArrays.Builder<>(Object[].class, input.length);
+        ArrayBuilder<E> builder = new ArrayBuilder<>(Object[].class, input.length);
         // implicit nullcheck of input
         for (int i = 0; i < input.length; i++) {
             builder.set(i, Objects.requireNonNull(input[i]));
@@ -648,7 +649,7 @@ class ImmutableCollections {
         }
 
         private Object frozenArray(Class<?> arrayType) {
-            FrozenArrays.Builder<Object> builder = new FrozenArrays.Builder<>(arrayType, size());
+            ArrayBuilder<Object> builder = new ArrayBuilder<>(arrayType, size());
             builder.set(0, e0);
             if (e1 != EMPTY) {
                 builder.set(1, e1);

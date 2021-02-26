@@ -47,6 +47,23 @@ public class FrozenArrays {
     }
 
     /**
+     * Returns a frozen array containing the given elements.
+     *
+     * @param <T> the {@code array}'s element type
+     * @param elements the elements to be contained in the array
+     * @return a frozen array containing the specified elements
+     */
+    public static <T> T[] freeze(T[] elements) {
+        Class<?> arrayClass = elements.getClass();
+        int length = elements.length;
+        @SuppressWarnings("unchecked")
+        T[] result = (T[])UNSAFE.makeLarvalArray(arrayClass, length);
+        System.arraycopy(elements, 0, result, 0, length);
+        UNSAFE.freezeLarvalArray(result);
+        return result;
+    }
+
+    /**
      * Copies the specified array, truncating or padding with nulls (if necessary)
      * so the copy has the specified length.  For all indices that are
      * valid in both the original array and the copy, the two arrays will
@@ -69,7 +86,6 @@ public class FrozenArrays {
     public static <T> T[] freeze(T[] original, int newLength) {
         return freeze(original, newLength, (Class<? extends T[]>)original.getClass());
     }
-
 
     /**
      * Copies the specified array, truncating or padding with nulls (if necessary)
@@ -193,51 +209,6 @@ public class FrozenArrays {
                          Math.min(original.length - from, newLength));
         @SuppressWarnings("unchecked")
         T[] result = (T[])UNSAFE.freezeLarvalArray(copy);
-        return result;
-    }
-
-    /**
-     * Builder for constructing a frozen array
-     * @param <E> element type
-     */
-    public static class Builder<E> {
-        final E[] array;
-
-        @SuppressWarnings("unchecked")
-        public Builder(Class<?> arrayClass, int length) {
-            this.array = (E[])UNSAFE.makeLarvalArray(arrayClass, length);
-        }
-
-        public Builder<E> set(int index, E element) {
-            array[index] = element;
-            return this;
-        }
-
-        public Builder<E> copy(E[] original) {
-            System.arraycopy(original, 0, array, 0, original.length);
-            return this;
-        }
-
-        @SuppressWarnings("unchecked")
-        public E[] build() {
-            return (E[]) Objects.requireNonNull(UNSAFE.freezeLarvalArray(array));
-        }
-    }
-
-    /**
-     * Returns a frozen array containing the given elements.
-     *
-     * @param <T> the {@code array}'s element type
-     * @param elements the elements to be contained in the array
-     * @return a frozen array containing the specified elements
-     */
-    public static <T> T[] freeze(T[] elements) {
-        Class<?> arrayClass = elements.getClass();
-        int length = elements.length;
-        @SuppressWarnings("unchecked")
-        T[] result = (T[])UNSAFE.makeLarvalArray(arrayClass, length);
-        System.arraycopy(elements, 0, result, 0, length);
-        UNSAFE.freezeLarvalArray(result);
         return result;
     }
 

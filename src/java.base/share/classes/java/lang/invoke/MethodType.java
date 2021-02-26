@@ -42,6 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Stream;
 
+import jdk.internal.util.ArrayBuilder;
 import jdk.internal.util.FrozenArrays;
 import jdk.internal.vm.annotation.Stable;
 import sun.invoke.util.BytecodeDescriptor;
@@ -282,7 +283,7 @@ class MethodType
      */
     public static MethodType methodType(Class<?> rtype, Class<?> ptype0, Class<?>... ptypes) {
         int numParamTypes = 1+ptypes.length;
-        FrozenArrays.Builder<Class<?>> builder = new FrozenArrays.Builder<>(Class[].class, numParamTypes);
+        ArrayBuilder<Class<?>> builder = new ArrayBuilder<>(Class[].class, numParamTypes);
         builder.set(0, ptype0);
         for (int i = 0; i < ptypes.length; ++i) {
             builder.set(i+1, ptypes[i]);

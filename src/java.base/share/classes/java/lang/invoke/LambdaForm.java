@@ -26,6 +26,7 @@
 package java.lang.invoke;
 
 import jdk.internal.perf.PerfCounter;
+import jdk.internal.util.ArrayBuilder;
 import jdk.internal.util.FrozenArrays;
 import jdk.internal.vm.annotation.DontInline;
 import jdk.internal.vm.annotation.Hidden;
@@ -653,7 +654,7 @@ class LambdaForm {
 
     /** Return the method type corresponding to my basic type signature. */
     MethodType methodType() {
-        FrozenArrays.Builder<Class<?>> builder = new FrozenArrays.Builder<>(Class[].class, arity);
+        ArrayBuilder<Class<?>> builder = new ArrayBuilder<>(Class[].class, arity);
         for (int i = 0; i < arity; ++i) {
             builder.set(i, parameterType(i).btClass);
         }

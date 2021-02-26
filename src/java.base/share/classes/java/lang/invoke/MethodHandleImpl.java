@@ -32,7 +32,7 @@ import jdk.internal.org.objectweb.asm.ClassWriter;
 import jdk.internal.org.objectweb.asm.MethodVisitor;
 import jdk.internal.reflect.CallerSensitive;
 import jdk.internal.reflect.Reflection;
-import jdk.internal.util.FrozenArrays;
+import jdk.internal.util.ArrayBuilder;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.annotation.Hidden;
 import jdk.internal.vm.annotation.Stable;
@@ -314,7 +314,7 @@ abstract class MethodHandleImpl {
             if (convCount == 0) {
                 midType = srcType;
             } else {
-                FrozenArrays.Builder<Class<?>> builder = new FrozenArrays.Builder<>(Class[].class, midType.parameterCount());
+                ArrayBuilder<Class<?>> builder = new ArrayBuilder<>(Class[].class, midType.parameterCount());
                 builder.copy(midType.ptypes());
                 for (int pos : positions) {
                     builder.set(pos - 1, newType);

@@ -34,6 +34,7 @@ import jdk.internal.org.objectweb.asm.Opcodes;
 import jdk.internal.org.objectweb.asm.Type;
 import jdk.internal.reflect.CallerSensitive;
 import jdk.internal.reflect.Reflection;
+import jdk.internal.util.ArrayBuilder;
 import jdk.internal.util.FrozenArrays;
 import jdk.internal.vm.annotation.ForceInline;
 import sun.invoke.util.ValueConversions;
@@ -5572,7 +5573,7 @@ assertEquals("XY", (String) f2.invokeExact("x", "y")); // XY
         BoundMethodHandle result = adapter.rebind();
         Class<?> newParamType = filterType.parameterType(0);
 
-        FrozenArrays.Builder<Class<?>> builder = new FrozenArrays.Builder<>(Class[].class, targetType.parameterCount());
+        ArrayBuilder<Class<?>> builder = new ArrayBuilder<>(Class[].class, targetType.parameterCount());
         builder.copy(targetType.ptypes());
         for (int pos : positions) {
             builder.set(pos - 1, newParamType);
