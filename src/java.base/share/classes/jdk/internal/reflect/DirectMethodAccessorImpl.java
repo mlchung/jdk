@@ -43,7 +43,6 @@ import java.util.Arrays;
 import java.util.Objects;
 
 import static java.lang.invoke.MethodType.methodType;
-import static jdk.internal.reflect.AccessorUtils.isIllegalArgument;
 import static jdk.internal.reflect.MethodHandleAccessorFactory.SPECIALIZED_PARAM_COUNT;
 
 abstract class DirectMethodAccessorImpl extends MethodAccessorImpl {
@@ -149,16 +148,17 @@ abstract class DirectMethodAccessorImpl extends MethodAccessorImpl {
             checkArgumentCount(paramCount, args);
             try {
                 return invokeImpl(args);
-            } catch (ClassCastException | WrongMethodTypeException e) {
+            } catch (ClassCastException|WrongMethodTypeException e) {
                 if (isIllegalArgument(e))
-                    throw new IllegalArgumentException("argument type mismatch", e);
+                    throw new IllegalArgumentException("argument type mismatch");
                 else
                     throw new InvocationTargetException(e);
             } catch (NullPointerException e) {
-                if (isIllegalArgument(e))
+                if (isIllegalArgument(e)) {
                     throw new IllegalArgumentException(e);
-                else
+                } else {
                     throw new InvocationTargetException(e);
+                }
             } catch (Throwable e) {
                 throw new InvocationTargetException(e);
             }
@@ -205,16 +205,18 @@ abstract class DirectMethodAccessorImpl extends MethodAccessorImpl {
             checkArgumentCount(paramCount, args);
             try {
                 return invokeImpl(obj, args);
-            } catch (ClassCastException | WrongMethodTypeException e) {
-                if (isIllegalArgument(e))
-                    throw new IllegalArgumentException("argument type mismatch", e);
-                else
+            } catch (ClassCastException|WrongMethodTypeException e) {
+                if (isIllegalArgument(e)) {
+                    throw newIllegalArgumentException(obj);
+                } else {
                     throw new InvocationTargetException(e);
+                }
             } catch (NullPointerException e) {
-                if (isIllegalArgument(e))
+                if (isIllegalArgument(e)) {
                     throw new IllegalArgumentException(e);
-                else
+                } else {
                     throw new InvocationTargetException(e);
+                }
             } catch (Throwable e) {
                 throw new InvocationTargetException(e);
             }
@@ -235,6 +237,16 @@ abstract class DirectMethodAccessorImpl extends MethodAccessorImpl {
 
         boolean isIllegalArgument(RuntimeException ex) {
             return AccessorUtils.isIllegalArgument(InstanceMethodAccessor.class, ex);
+        }
+
+        IllegalArgumentException newIllegalArgumentException(Object obj) {
+            String msg;
+            if (obj != null && !method.getDeclaringClass().isAssignableFrom(obj.getClass())) {
+                msg = "object is not an instance of declaring class";
+            } else {
+                msg = "argument type mismatch";
+            }
+            return new IllegalArgumentException(msg);
         }
     }
 
@@ -323,14 +335,15 @@ abstract class DirectMethodAccessorImpl extends MethodAccessorImpl {
                 return invokeImpl(caller, args);
             } catch (ClassCastException|WrongMethodTypeException e) {
                 if (isIllegalArgument(e))
-                    throw new IllegalArgumentException("argument type mismatch", e);
+                    throw new IllegalArgumentException("argument type mismatch");
                 else
                     throw new InvocationTargetException(e);
             } catch (NullPointerException e) {
-                if (isIllegalArgument(e))
+                if (isIllegalArgument(e)) {
                     throw new IllegalArgumentException(e);
-                else
+                } else {
                     throw new InvocationTargetException(e);
+                }
             } catch (Throwable e) {
                 throw new InvocationTargetException(e);
             }
@@ -379,15 +392,17 @@ abstract class DirectMethodAccessorImpl extends MethodAccessorImpl {
             try {
                 return invokeImpl(caller, obj, args);
             } catch (ClassCastException|WrongMethodTypeException e) {
-                if (isIllegalArgument(e))
-                    throw new IllegalArgumentException("argument type mismatch", e);
-                else
+                if (isIllegalArgument(e)) {
+                    throw newIllegalArgumentException(obj);
+                } else {
                     throw new InvocationTargetException(e);
+                }
             } catch (NullPointerException e) {
-                if (isIllegalArgument(e))
+                if (isIllegalArgument(e)) {
                     throw new IllegalArgumentException(e);
-                else
+                } else {
                     throw new InvocationTargetException(e);
+                }
             } catch (Throwable e) {
                 throw new InvocationTargetException(e);
             }
@@ -452,15 +467,22 @@ abstract class DirectMethodAccessorImpl extends MethodAccessorImpl {
                 // invoke the target method handle via an invoker
                 return invoker.invokeExact(target, obj, args);
             } catch (ClassCastException|WrongMethodTypeException e) {
-                if (isIllegalArgument(e))
-                    throw new IllegalArgumentException("argument type mismatch", e);
-                else
+                if (isIllegalArgument(e)) {
+                    // No cause in IAE to be consistent with the old behavior
+                    if (obj != null && !method.getDeclaringClass().isAssignableFrom(obj.getClass())) {
+                        throw new IllegalArgumentException("object is not an instance of declaring class");
+                    } else {
+                        throw new IllegalArgumentException("argument type mismatch");
+                    }
+                } else {
                     throw new InvocationTargetException(e);
+                }
             } catch (NullPointerException e) {
-                if (isIllegalArgument(e))
+                if (isIllegalArgument(e)) {
                     throw new IllegalArgumentException(e);
-                else
+                } else {
                     throw new InvocationTargetException(e);
+                }
             } catch (Throwable e) {
                 throw new InvocationTargetException(e);
             }

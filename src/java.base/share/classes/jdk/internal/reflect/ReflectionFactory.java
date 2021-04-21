@@ -175,8 +175,8 @@ public class ReflectionFactory {
             // TODO: re-examine if the Field implementation using Unsafe should be kept
             // for early startup use
             if (!VM.isJavaLangInvokeInited()) {
-                throw new InternalError(field.getDeclaringClass() + "::" + field.getName() +
-                        " cannot be accessed reflectively before initPhase2");
+                throw new InternalError(field.getDeclaringClass().getName() + "::" + field.getName() +
+                        " cannot be accessed reflectively before java.lang.invoke is initialized");
             }
             return MethodHandleAccessorFactory.newFieldAccessor(field, isReadOnly);
         } else {

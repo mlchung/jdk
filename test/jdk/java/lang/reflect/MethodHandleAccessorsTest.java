@@ -120,10 +120,6 @@ public class MethodHandleAccessorsTest {
         return sb.toString();
     }
 
-    public static void throws_exception(RuntimeException exc) {
-        throw exc;
-    }
-
     public static final class Public {
         public static final int STATIC_FINAL = 1;
         private final int i;
@@ -208,6 +204,15 @@ public class MethodHandleAccessorsTest {
             return "Private{" +
                    "i=" + i +
                    '}';
+        }
+    }
+
+    static final class Thrower {
+        public Thrower(RuntimeException exc) {
+            throw exc;
+        }
+        public static void throws_exception(RuntimeException exc) {
+            throw exc;
         }
     }
 
@@ -438,7 +443,6 @@ public class MethodHandleAccessorsTest {
         MethodHandleAccessorsTest inst = new MethodHandleAccessorsTest();
         Object wrongInst = new Object();
         boolean newImpl = Boolean.getBoolean("jdk.reflect.useDirectMethodHandle");
-        System.out.println("TESTING old implementation " + newImpl);
         return new Object[][]{
             new Object[]{"public_static_I_V",  int.class, null, new Object[]{12}, null, noException},
             new Object[]{"public_static_I_I",  int.class, null, new Object[]{12}, 12, noException},
@@ -455,8 +459,7 @@ public class MethodHandleAccessorsTest {
                     newImpl ? wrong_argument_count_no_details : wrong_argument_count},
             new Object[] {"public_I_I",        int.class, inst, new Object[]{12, 13}, null,
                     newImpl ? wrong_argument_count_no_details : wrong_argument_count},
-            new Object[] {"public_I_I",        int.class, wrongInst, new Object[]{12}, 12,
-                    newImpl ? mismatched_argument_type : mismatched_target_type},
+            new Object[] {"public_I_I",        int.class, wrongInst, new Object[]{12}, 12, mismatched_target_type},
             new Object[] {"public_I_I",        int.class, null, new Object[]{12}, 12, null_target},
 
             new Object[] {"public_static_I_V", int.class, null, null, null,
@@ -467,9 +470,6 @@ public class MethodHandleAccessorsTest {
 
             new Object[] {"public_I_I", int.class, inst, new Object[]{null}, null,
                     newImpl ? null_argument_value_npe : null_argument_value},
-            new Object[] {"throws_exception", RuntimeException.class, null, new Object[]{new NullPointerException("NPE")}, null, wrapped_npe},
-            new Object[] {"throws_exception", RuntimeException.class, null, new Object[]{new IllegalArgumentException("IAE")}, null, wrapped_iae},
-            new Object[] {"throws_exception", RuntimeException.class, null, new Object[]{new ClassCastException("CCE")}, null, wrapped_cce},
         };
     }
 
@@ -545,6 +545,28 @@ public class MethodHandleAccessorsTest {
         doTest(Private.class.getDeclaredConstructor(int.class), new Object[]{12}, new Private(12));
 
         doTest(Abstract.class.getDeclaredConstructor(), null, null, new InstantiationException());
+    }
+
+    @DataProvider(name = "throwException")
+    private Object[][] throwException() {
+        return new Object[][]{
+                new Object[] {new NullPointerException("NPE"), wrapped_npe},
+                new Object[] {new IllegalArgumentException("IAE"), wrapped_iae},
+                new Object[] {new ClassCastException("CCE"), wrapped_cce},
+        };
+    }
+
+    /*
+     * Test Method::invoke and Constructor::newInstance to wrap NPE/CCE/IAE
+     * thrown by the member
+     */
+    @Test(dataProvider = "throwException")
+    public void testInvocationTargetException(Throwable ex, Throwable[] expectedExpections) throws Exception {
+        Object[] args = new Object[] { ex };
+        // test static method
+        doTest(Thrower.class.getDeclaredMethod("throws_exception", RuntimeException.class), null, args, null, expectedExpections);
+        // test constructor
+        doTest(Thrower.class.getDeclaredConstructor(RuntimeException.class), args, null, expectedExpections);
     }
 
     @Test
