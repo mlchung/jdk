@@ -246,9 +246,10 @@ class MethodHandleNatives {
         return true;
     }
     static {
-        // java.lang.invoke has been initialized when entering initPhase 2
-        VM.setJavaLangSystemInited();
-        assert(verifyConstants());
+        VM.setJavaLangInvokeInited();
+        // Workaround JDK-8265605: CDS causes BootLoader that can't be used
+        // until initPhase2
+        // assert(verifyConstants());
     }
 
     // Up-calls from the JVM.

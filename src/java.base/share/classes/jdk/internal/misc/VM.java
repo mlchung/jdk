@@ -94,7 +94,7 @@ public class VM {
     }
 
     private static @Stable boolean javaLangInvokeInited;
-    public static void setJavaLangSystemInited() {
+    public static void setJavaLangInvokeInited() {
         if (javaLangInvokeInited) {
             throw new InternalError("java.lang.invoke already inited");
         }
