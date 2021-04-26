@@ -61,6 +61,7 @@ class MethodHandleStatics {
     static final boolean VAR_HANDLE_GUARDS;
     static final int MAX_ARITY;
     static final boolean VAR_HANDLE_IDENTITY_ADAPT;
+    static final boolean DEBUG_ASTYPE_CACHE;
 
     static {
         Properties props = GetPropertyAction.privilegedGetProperties();
@@ -90,7 +91,8 @@ class MethodHandleStatics {
                 props.getProperty("java.lang.invoke.VarHandle.VAR_HANDLE_GUARDS", "true"));
         VAR_HANDLE_IDENTITY_ADAPT = Boolean.parseBoolean(
                 props.getProperty("java.lang.invoke.VarHandle.VAR_HANDLE_IDENTITY_ADAPT", "false"));
-
+        DEBUG_ASTYPE_CACHE = Boolean.parseBoolean(
+                props.getProperty("java.lang.invoke.MethodHandle.DEBUG_ASTYPE_CACHE"));
         // Do not adjust this except for special platforms:
         MAX_ARITY = Integer.parseInt(
                 props.getProperty("java.lang.invoke.MethodHandleImpl.MAX_ARITY", "255"));

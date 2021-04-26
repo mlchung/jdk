@@ -884,8 +884,16 @@ public abstract class MethodHandle implements Constable {
         if (!type.isConvertibleTo(newType))
             throw new WrongMethodTypeException("cannot convert "+this+" to "+newType);
         MethodHandle mh = MethodHandleImpl.makePairwiseConvert(this, newType, true);
-        asTypeCache = new WeakReference<>(mh);
+        setAsTypeCache(mh, newType);
         return mh;
+    }
+
+    void setAsTypeCache(MethodHandle mh, MethodType newType) {
+        if (DEBUG_ASTYPE_CACHE) {
+            MethodHandle atc = asTypeCache != null ? asTypeCache.get() : null;
+            System.out.println(this.getClass() + " asType cache: " + asTypeCache + " " + atc + " new type " + newType);
+        }
+        asTypeCache = new WeakReference<>(mh);
     }
 
     /**

@@ -497,14 +497,14 @@ abstract class MethodHandleImpl {
                 type.parameterType(collectArg).isAssignableFrom(newType.parameterType(collectArg))) {
                 // if arity and trailing parameter are compatible, do normal thing
                 MethodHandle mh = asFixedArity().asType(newType);
-                asTypeCache = new WeakReference<>(mh);
+                setAsTypeCache(mh, newType);
                 return mh;
             }
             // check cache
             MethodHandle acc = asCollectorCache;
             if (acc != null && acc.type().parameterCount() == newArity) {
                 MethodHandle mh = acc.asType(newType);
-                asTypeCache = new WeakReference<>(mh);
+                setAsTypeCache(mh, newType);
                 return mh;
             }
 
@@ -519,7 +519,7 @@ abstract class MethodHandleImpl {
             }
             asCollectorCache = collector;
             MethodHandle mh = collector.asType(newType);
-            asTypeCache = new WeakReference<>(mh);
+            setAsTypeCache(mh, newType);
             return mh;
         }
 
@@ -748,7 +748,7 @@ abstract class MethodHandleImpl {
             } else {
                 wrapper = newTarget; // no need for a counting wrapper anymore
             }
-            asTypeCache = new WeakReference<>(wrapper);
+            setAsTypeCache(wrapper, newType);
             return wrapper;
         }
 
@@ -1343,7 +1343,7 @@ abstract class MethodHandleImpl {
             // This MH is an alias for target, except for the MemberName
             // Drop the MemberName if there is any conversion.
             MethodHandle mh =  target.asType(newType);
-            asTypeCache = new WeakReference<>(mh);
+            setAsTypeCache(mh, newType);
             return mh;
         }
     }
@@ -1397,7 +1397,7 @@ abstract class MethodHandleImpl {
             // This MH is an alias for target, except for the intrinsic name
             // Drop the name if there is any conversion.
             MethodHandle mh = target.asType(newType);
-            asTypeCache = new WeakReference<>(mh);
+            setAsTypeCache(mh, newType);
             return mh;
         }
 
