@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -51,7 +51,7 @@ import jdk.tools.jlink.plugin.ResourcePoolModule;
  * On platform that does not support symbolic links, a file
  * will be created to contain the path to the linked target.
  */
-public final class LegalNoticeFilePlugin extends AbstractPlugin {
+public final class DedupLegalFilePlugin extends AbstractPlugin {
 
     private static final String ERROR_IF_NOT_SAME_CONTENT = "error-if-not-same-content";
     private final Map<String, List<ResourcePoolEntry>> licenseOrNotice =
@@ -59,7 +59,7 @@ public final class LegalNoticeFilePlugin extends AbstractPlugin {
 
     private boolean errorIfNotSameContent = false;
 
-    public LegalNoticeFilePlugin() {
+    public DedupLegalFilePlugin() {
         super("dedup-legal-notices");
     }
 

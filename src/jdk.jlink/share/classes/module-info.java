@@ -59,24 +59,25 @@ module jdk.jlink {
         jdk.tools.jlink.internal.Main.JlinkToolProvider;
 
     provides jdk.tools.jlink.plugin.Plugin with
+        jdk.tools.jlink.internal.plugins.AddOptionsPlugin,
+        jdk.tools.jlink.internal.plugins.CDSPlugin,
+        jdk.tools.jlink.internal.plugins.CopyLicensePlugin,
+        jdk.tools.jlink.internal.plugins.DefaultCompressPlugin,
         jdk.tools.jlink.internal.plugins.DefaultStripDebugPlugin,
-        jdk.tools.jlink.internal.plugins.StripJavaDebugAttributesPlugin,
-        jdk.tools.jlink.internal.plugins.ExcludePlugin,
+        jdk.tools.jlink.internal.plugins.DedupLegalFilePlugin,
         jdk.tools.jlink.internal.plugins.ExcludeFilesPlugin,
         jdk.tools.jlink.internal.plugins.ExcludeJmodSectionPlugin,
-        jdk.tools.jlink.internal.plugins.LegalNoticeFilePlugin,
-        jdk.tools.jlink.internal.plugins.SystemModulesPlugin,
-        jdk.tools.jlink.internal.plugins.StripNativeCommandsPlugin,
-        jdk.tools.jlink.internal.plugins.OrderResourcesPlugin,
-        jdk.tools.jlink.internal.plugins.DefaultCompressPlugin,
+        jdk.tools.jlink.internal.plugins.ExcludePlugin,
         jdk.tools.jlink.internal.plugins.ExcludeVMPlugin,
-        jdk.tools.jlink.internal.plugins.IncludeLocalesPlugin,
         jdk.tools.jlink.internal.plugins.GenerateJLIClassesPlugin,
+        jdk.tools.jlink.internal.plugins.IncludeLocalesPlugin,
+        jdk.tools.jlink.internal.plugins.OrderResourcesPlugin,
+        jdk.tools.jlink.internal.plugins.StripJavaDebugAttributesPlugin,
+        jdk.tools.jlink.internal.plugins.StripNativeCommandsPlugin,
+        jdk.tools.jlink.internal.plugins.SystemModulesPlugin,
         jdk.tools.jlink.internal.plugins.ReleaseInfoPlugin,
-        jdk.tools.jlink.internal.plugins.AddOptionsPlugin,
         jdk.tools.jlink.internal.plugins.VendorBugURLPlugin,
         jdk.tools.jlink.internal.plugins.VendorVMBugURLPlugin,
-        jdk.tools.jlink.internal.plugins.VendorVersionPlugin,
-        jdk.tools.jlink.internal.plugins.CDSPlugin;
+        jdk.tools.jlink.internal.plugins.VendorVersionPlugin;
 
 }

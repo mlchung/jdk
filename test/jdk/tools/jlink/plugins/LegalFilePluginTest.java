@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,7 @@
 /*
  * @test
  * @bug 8169925
- * @summary Validate the license files deduplicated in the image
+ * @summary Test --dedup-legal-notices and --copy-license plugins
  * @library /test/lib
  * @modules jdk.compiler
  *          jdk.jlink
@@ -247,15 +247,114 @@ public class LegalFilePluginTest {
                          .matches("Error:.*/m4/legal/m4/test-license .*contain different content"));
     }
 
+    // test copying a license file to the top-level directory
+    @Test
+    public void topLevelLicense() throws IOException {
+        if (Files.notExists(MODULE_PATH)) {
+            // exploded image
+            return;
+        }
+
+        String dir = "base-image";
+        Path image = createImage(dir, List.of("--add-modules=java.base",
+                                              "--output", imageDir(dir),
+                                                "--copy-license",
+                                                "java.base/LICENSE:jdk-license"));
+
+        Path license = image.resolve("jdk-license");
+        Path javaBaseLicense = image.resolve("legal/java.base/LICENSE");
+        compareFileContent(license, Files.readAllBytes(javaBaseLicense));
+    }
+
+    // Test copying multiple license files
+    @Test
+    public void copyLicenses() throws Exception {
+        if (Files.notExists(MODULE_PATH)) {
+            // exploded image
+            return;
+        }
+
+        String mpath = MODULE_PATH.toString() + File.pathSeparator + JMODS_DIR.toString();
+        String outputDir = "licenses-test";
+        String dir = "licenses";
+        Map<String,String> licenses = Map.of("java.base", "LICENSE",
+                                             "m1", "m1-license.txt",
+                                             "m2","m2-license");
+        String copyLicenseArgs = licenses.entrySet().stream()
+                .map(e -> String.format("%s/%s:%s", e.getKey(), e.getValue(), dir + "/" + e.getValue()))
+                .collect(Collectors.joining(","))  ;
+        Path image = createImage(outputDir, List.of("--module-path", mpath,
+                                                    "--output", imageDir(outputDir),
+                                                    "--add-modules=m1,m2",
+                                                    "--copy-license", copyLicenseArgs));
+        List<String> files = Files.walk(image.resolve(dir), Integer.MAX_VALUE)
+                .filter(p -> Files.isRegularFile(p))
+                .map(Path::getFileName)
+                .map(Path::toString)
+                .toList();
+        assertEquals(files.stream().sorted().toArray(), licenses.values().stream().sorted().toArray());
+        licenses.entrySet().stream().forEach(e -> {
+            String mn = e.getKey();
+            String fn = e.getValue();
+            Path path = image.resolve("legal").resolve(mn).resolve(fn);
+            System.out.println(fn);
+            try {
+                compareFileContent(image.resolve(dir).resolve(fn), Files.readAllBytes(path));
+            } catch (IOException x) {
+                throw new UncheckedIOException(x);
+            }
+        });
+    }
+
+    @DataProvider(name = "illegalArguments")
+    public Object[][] illegalArguments() {
+        return new Object[][] {
+                { List.of("m1/LICENSE"), ".* invalid plugin argument m1/LICENSE"},
+                { List.of("m1:LICENSE"), ".* invalid plugin argument m1"},
+                { List.of("m1/LICENSE:license1", "m1/LICENSE:license2"), ".* duplicated source m1/LICENSE"},
+                { List.of("m1/LICENSE:license/LICENSE", "m1/m1-license.txt:license/LICENSE"), ".* duplicated destination license/LICENSE"},
+                { List.of("m1/non-existent:license"), ".* m1/non-existent does not exist"},
+                { List.of("m2/m2-license:m2-license"), ".* m2/m2-license does not exist"},
+                { List.of("m1/LICENSE:legal/LICENSE"), ".* invalid path for entry type TOP: legal/LICENSE"}
+        };
+    }
+
+    @Test(dataProvider = "illegalArguments")
+    public void illegalCopyLicenseArgument(List<String> args, String expectedMsg) {
+        if (Files.notExists(MODULE_PATH)) {
+            // exploded image
+            return;
+        }
+
+        String test = "illegalArgumentTest";
+        String mpath = MODULE_PATH.toString() + File.pathSeparator + JMODS_DIR.toString();
+        List<String> options = Stream.of("--module-path", mpath,
+                                         "--add-modules=m1",
+                                         "--output", imageDir(test),
+                                         "--copy-license",
+                                         args.stream().collect(Collectors.joining(",")))
+                                     .collect(Collectors.toList());
+
+        StringWriter writer = new StringWriter();
+        PrintWriter pw = new PrintWriter(writer);
+        System.out.println("jlink " + options.stream().collect(Collectors.joining(" ")));
+        int rc = JLINK_TOOL.run(pw, pw, options.toArray(new String[0]));
+        assertTrue(rc != 0);
+        assertTrue(writer.toString().trim().matches(expectedMsg));
+    }
+
     private void compareFileContent(Path file, String content) {
         try {
-            byte[] bytes = Files.readAllBytes(file);
-            byte[] expected = String.format("%s%n", content).getBytes();
-            assertEquals(bytes, expected, String.format("%s not matched:%nfile: %s%nexpected:%s%n",
-                file.toString(), new String(bytes), new String(expected)));
+            compareFileContent(file, String.format("%s%n", content).getBytes());
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    private void compareFileContent(Path file, byte[] expected) throws IOException {
+        byte[] bytes = Files.readAllBytes(file);
+        assertEquals(bytes, expected, String.format("%s not matched:%nfile: %s%nexpected:%s%n",
+                file.toString(), new String(bytes), new String(expected)));
     }
 
     private Path createImage(String outputDir, List<String> options) {

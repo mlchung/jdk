@@ -78,6 +78,14 @@ public final class DefaultImageBuilder implements ImageBuilder {
     public static final String LEGAL_DIRNAME    = "legal";
     public static final String MAN_DIRNAME      = "man";
 
+    private static final List<String> IMAGE_DIRNAMES = List.of(
+            BIN_DIRNAME,
+            CONF_DIRNAME,
+            INCLUDE_DIRNAME,
+            LIB_DIRNAME,
+            LEGAL_DIRNAME,
+            MAN_DIRNAME);
+
     /**
      * The default java executable Image.
      */
@@ -371,8 +379,12 @@ public final class DefaultImageBuilder implements ImageBuilder {
         String module = "/" + entry.moduleName() + "/";
         String filename = entry.path().substring(module.length());
 
-        // Remove radical lib|config|...
-        return filename.substring(filename.indexOf('/') + 1);
+        if (entry.type() != Type.TOP) {
+            // Remove radical lib|config|...
+            return filename.substring(filename.indexOf('/') + 1);
+        } else {
+            return filename;
+        }
     }
 
     /**
@@ -394,14 +406,23 @@ public final class DefaultImageBuilder implements ImageBuilder {
             case LEGAL_NOTICE:
                 return Paths.get(LEGAL_DIRNAME, entryToFileName(entry));
             case TOP:
-                return Paths.get(entryToFileName(entry));
+                String fn = entryToFileName(entry);
+                int i = fn.indexOf('/');
+                if (i >= 0) {
+                    String dir = fn.substring(0, i);
+                    if (IMAGE_DIRNAMES.contains(dir)) {
+                        throw new IllegalArgumentException("invalid path for entry type " + entry.type()
+                                + ": " + fn);
+                    }
+                }
+                return Paths.get(fn);
             default:
                 throw new IllegalArgumentException("invalid type: " + entry);
         }
     }
 
     private void accept(ResourcePoolEntry file) throws IOException {
-        if (file.linkedTarget() != null && file.type() != Type.LEGAL_NOTICE) {
+        if (file.linkedTarget() != null && (file.type() != Type.LEGAL_NOTICE && file.type() != Type.TOP)) {
             throw new UnsupportedOperationException("symbolic link not implemented: " + file);
         }
 
@@ -422,19 +443,12 @@ public final class DefaultImageBuilder implements ImageBuilder {
                     writeEntry(in, root.resolve(entryToImagePath(file)));
                     break;
                 case LEGAL_NOTICE:
-                    Path source = entryToImagePath(file);
-                    if (file.linkedTarget() == null) {
-                        writeEntry(in, root.resolve(source));
-                    } else {
-                        Path target = entryToImagePath(file.linkedTarget());
-                        Path relPath = source.getParent().relativize(target);
-                        writeSymLinkEntry(root.resolve(source), relPath);
-                    }
+                    writeEntryOrSymLink(in, file);
                     break;
                 case TOP:
                     // Copy TOP files of the "java.base" module (only)
                     if ("java.base".equals(file.moduleName())) {
-                        writeEntry(in, root.resolve(entryToImagePath(file)));
+                        writeEntryOrSymLink(in, file);
                     } else {
                         throw new InternalError("unexpected TOP entry: " + file.path());
                     }
@@ -442,6 +456,18 @@ public final class DefaultImageBuilder implements ImageBuilder {
                 default:
                     throw new InternalError("unexpected entry: " + file.path());
             }
+        }
+    }
+
+    private void writeEntryOrSymLink(InputStream in, ResourcePoolEntry file) throws IOException {
+        Path source = entryToImagePath(file);
+        if (file.linkedTarget() == null) {
+            writeEntry(in, root.resolve(source));
+        } else {
+            Path target = entryToImagePath(file.linkedTarget());
+            Path parent = source.getParent();
+            Path relPath = parent != null ? parent.relativize(target) : target;
+            writeSymLinkEntry(root.resolve(source), relPath);
         }
     }
 
