@@ -26,32 +26,46 @@
 package jdk.internal.reflect;
 
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.WrongMethodTypeException;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
-
-import static java.lang.invoke.MethodType.methodType;
+import java.lang.reflect.Modifier;
 
 class MethodHandleBooleanFieldAccessorImpl extends MethodHandleFieldAccessorImpl {
-    private final MethodHandle getter_Z;
-    private final MethodHandle setter_Z;
-    MethodHandleBooleanFieldAccessorImpl(Field field, MethodHandle getter, MethodHandle setter) {
-        super(field, getter, setter);
-        this.getter_Z = getter.asType(methodType(boolean.class, Object.class));
-        this.setter_Z = setter != null ? setter.asType(methodType(void.class, Object.class, boolean.class))
-                : null;
+    static FieldAccessorImpl fieldAccessor(Field field, MethodHandle getter, MethodHandle setter, boolean isReadOnly) {
+        boolean isStatic = Modifier.isStatic(field.getModifiers());
+        if (isStatic) {
+            getter = getter.asType(MethodType.methodType(boolean.class));
+            if (setter != null) {
+                setter = setter.asType(MethodType.methodType(void.class, boolean.class));
+            }
+        } else {
+            getter = getter.asType(MethodType.methodType(boolean.class, Object.class));
+            if (setter != null) {
+                setter = setter.asType(MethodType.methodType(void.class, Object.class, boolean.class));
+            }
+        }
+        return new MethodHandleBooleanFieldAccessorImpl(field, getter, setter, isReadOnly, isStatic);
     }
+
+    MethodHandleBooleanFieldAccessorImpl(Field field, MethodHandle getter, MethodHandle setter, boolean isReadOnly, boolean isStatic) {
+        super(field, getter, setter, isReadOnly, isStatic);
+    }
+
     public Object get(Object obj) throws IllegalArgumentException {
         return Boolean.valueOf(getBoolean(obj));
     }
 
     public boolean getBoolean(Object obj) throws IllegalArgumentException {
-        ensureObj(obj);
         try {
-            return (boolean) getter_Z.invokeExact(obj);
-        } catch (IllegalArgumentException e) {
+            if (isStatic()) {
+                return (boolean) getter.invokeExact();
+            } else {
+                return (boolean) getter.invokeExact(obj);
+            }
+        } catch (IllegalArgumentException|NullPointerException e) {
             throw e;
-        } catch (ClassCastException|NullPointerException e) {
-            throw new IllegalArgumentException(e.getMessage(), e);
+        } catch (ClassCastException e) {
+            throw newGetIllegalArgumentException(obj);
         } catch (Throwable e) {
             throw new InternalError(e);
         }
@@ -85,22 +99,43 @@ class MethodHandleBooleanFieldAccessorImpl extends MethodHandleFieldAccessorImpl
         throw newGetDoubleIllegalArgumentException();
     }
 
+    public void set(Object obj, Object value)
+            throws IllegalArgumentException, IllegalAccessException
+    {
+        ensureObj(obj);
+        if (isReadOnly()) {
+            throwFinalFieldIllegalAccessException(value);
+        }
+
+        if (value == null) {
+            throwSetIllegalArgumentException(value);
+        }
+
+        if (value instanceof Boolean b) {
+            setBoolean(obj, b.booleanValue());
+        } else {
+            throwSetIllegalArgumentException(value);
+        }
+    }
+
     public void setBoolean(Object obj, boolean z)
         throws IllegalArgumentException, IllegalAccessException
     {
-        ensureObj(obj);
-        if (isReadOnly) {
+        if (isReadOnly()) {
+            ensureObj(obj);     // throw NPE if obj is null on instance field
             throwFinalFieldIllegalAccessException(z);
         }
         try {
-            setter_Z.invokeExact(obj, z);
-        } catch (IllegalArgumentException e) {
+            if (isStatic()) {
+                setter.invokeExact(z);
+            } else {
+                setter.invokeExact(obj, z);
+            }
+        } catch (IllegalArgumentException|NullPointerException e) {
             throw e;
-        } catch (ClassCastException|NullPointerException e) {
-            throw new IllegalArgumentException(e.getMessage(), e);
-        } catch (WrongMethodTypeException e) {
-            e.printStackTrace();
-            throwSetIllegalArgumentException(z);
+        } catch (ClassCastException e) {
+            // receiver is of invalid type
+            throw newSetIllegalArgumentException(obj);
         } catch (Throwable e) {
             throw new InternalError(e);
         }

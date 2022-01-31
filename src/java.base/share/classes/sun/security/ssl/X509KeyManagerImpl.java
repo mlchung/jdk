@@ -269,8 +269,8 @@ final class X509KeyManagerImpl extends X509ExtendedKeyManager
             String keyStoreAlias = alias.substring(secondDot + 1);
             Builder builder = builders.get(builderIndex);
             KeyStore ks = builder.getKeyStore();
-            Entry newEntry = ks.getEntry
-                    (keyStoreAlias, builder.getProtectionParameter(alias));
+            Entry newEntry = ks.getEntry(keyStoreAlias,
+                    builder.getProtectionParameter(keyStoreAlias));
             if (!(newEntry instanceof PrivateKeyEntry)) {
                 // unexpected type of entry
                 return null;
@@ -382,15 +382,13 @@ final class X509KeyManagerImpl extends X509ExtendedKeyManager
                             issuerSet, false, checkType, constraints,
                             requestedServerNames, idAlgorithm);
                 if (results != null) {
-                    // the results will either be a single perfect match
-                    // or 1 or more imperfect matches
-                    // if it's a perfect match, return immediately
-                    EntryStatus status = results.get(0);
-                    if (status.checkResult == CheckResult.OK) {
-                        if (SSLLogger.isOn && SSLLogger.isOn("keymanager")) {
-                            SSLLogger.fine("KeyMgr: choosing key: " + status);
+                    for (EntryStatus status : results) {
+                        if (status.checkResult == CheckResult.OK) {
+                            if (SSLLogger.isOn && SSLLogger.isOn("keymanager")) {
+                                SSLLogger.fine("KeyMgr: choosing key: " + status);
+                            }
+                            return makeAlias(status);
                         }
-                        return makeAlias(status);
                     }
                     if (allResults == null) {
                         allResults = new ArrayList<EntryStatus>();
@@ -838,8 +836,7 @@ final class X509KeyManagerImpl extends X509ExtendedKeyManager
             AlgorithmConstraints constraints, Certificate[] chain,
             String variant) {
 
-        AlgorithmChecker checker =
-                new AlgorithmChecker(constraints, null, variant);
+        AlgorithmChecker checker = new AlgorithmChecker(constraints, variant);
         try {
             checker.init(false);
         } catch (CertPathValidatorException cpve) {

@@ -41,6 +41,7 @@ import jdk.jfr.internal.Type;
 import jdk.jfr.internal.consumer.ChunkHeader;
 import jdk.jfr.internal.consumer.ChunkParser;
 import jdk.jfr.internal.consumer.FileAccess;
+import jdk.jfr.internal.consumer.ParserState;
 import jdk.jfr.internal.consumer.RecordingInput;
 
 /**
@@ -61,6 +62,7 @@ import jdk.jfr.internal.consumer.RecordingInput;
  */
 public final class RecordingFile implements Closeable {
 
+    private final ParserState parserState = new ParserState();
     private boolean isLastEventInChunk;
     private final File file;
     private RecordingInput input;
@@ -193,6 +195,7 @@ public final class RecordingFile implements Closeable {
      *
      * @throws IOException if an I/O error occurred
      */
+    @Override
     public void close() throws IOException {
         if (input != null) {
             eof = true;
@@ -246,7 +249,7 @@ public final class RecordingFile implements Closeable {
     private void findNext() throws IOException {
         while (nextEvent == null) {
             if (chunkParser == null) {
-                chunkParser = new ChunkParser(input);
+                chunkParser = new ChunkParser(input, parserState);
             } else if (!chunkParser.isLastChunk()) {
                 chunkParser = chunkParser.nextChunkParser();
             } else {

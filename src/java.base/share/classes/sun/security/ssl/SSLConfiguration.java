@@ -79,6 +79,7 @@ final class SSLConfiguration implements Cloneable {
     BiFunction<SSLSocket, List<String>, String> socketAPSelector;
     BiFunction<SSLEngine, List<String>, String> engineAPSelector;
 
+    @SuppressWarnings("removal")
     HashMap<HandshakeCompletedListener, AccessControlContext>
                                 handshakeListeners;
 
@@ -96,7 +97,7 @@ final class SSLConfiguration implements Cloneable {
     static final boolean allowLegacyMasterSecret =
         Utilities.getBooleanProperty("jdk.tls.allowLegacyMasterSecret", true);
 
-    // Allow full handshake without Extended Master Secret extension.
+    // Use TLS1.3 middlebox compatibility mode.
     static final boolean useCompatibilityMode = Utilities.getBooleanProperty(
             "jdk.tls.client.useCompatibilityMode", true);
 
@@ -266,6 +267,7 @@ final class SSLConfiguration implements Cloneable {
     }
 
     // SSLSocket only
+    @SuppressWarnings("removal")
     void addHandshakeCompletedListener(
             HandshakeCompletedListener listener) {
 
@@ -408,7 +410,7 @@ final class SSLConfiguration implements Cloneable {
     }
 
     @Override
-    @SuppressWarnings({"unchecked", "CloneDeclaresCloneNotSupported"})
+    @SuppressWarnings({"removal","unchecked", "CloneDeclaresCloneNotSupported"})
     public Object clone() {
         // Note that only references to the configurations are copied.
         try {

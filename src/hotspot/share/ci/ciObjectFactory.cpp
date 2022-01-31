@@ -43,13 +43,14 @@
 #include "ci/ciTypeArrayKlass.hpp"
 #include "ci/ciUtilities.inline.hpp"
 #include "classfile/javaClasses.inline.hpp"
-#include "classfile/systemDictionary.hpp"
+#include "classfile/vmClasses.hpp"
 #include "compiler/compiler_globals.hpp"
 #include "gc/shared/collectedHeap.inline.hpp"
 #include "memory/allocation.inline.hpp"
 #include "memory/universe.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/handles.inline.hpp"
+#include "runtime/signature.hpp"
 #include "utilities/macros.hpp"
 
 // ciObjectFactory
@@ -153,8 +154,8 @@ void ciObjectFactory::init_shared_objects() {
   init_ident_of(ciEnv::_null_object_instance);
 
 #define VM_CLASS_DEFN(name, ignore_s)                              \
-  if (SystemDictionary::name##_is_loaded()) \
-    ciEnv::_##name = get_metadata(SystemDictionary::name())->as_instance_klass();
+  if (vmClasses::name##_is_loaded()) \
+    ciEnv::_##name = get_metadata(vmClasses::name())->as_instance_klass();
 
   VM_CLASSES_DO(VM_CLASS_DEFN)
 #undef VM_CLASS_DEFN
@@ -377,6 +378,7 @@ ciMetadata* ciObjectFactory::create_new_metadata(Metadata* o) {
   if (o->is_klass()) {
     Klass* k = (Klass*)o;
     if (k->is_instance_klass()) {
+      assert(!ReplayCompiles || ciReplay::no_replay_state() || !ciReplay::is_klass_unresolved((InstanceKlass*)k), "must be whitelisted for replay compilation");
       return new (arena()) ciInstanceKlass(k);
     } else if (k->is_objArray_klass()) {
       return new (arena()) ciObjArrayKlass(k);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2002, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,8 +32,6 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.net.UnixDomainSocketAddress;
-import java.net.StandardProtocolFamily;
 import java.net.StandardSocketOptions;
 import java.nio.*;
 import java.nio.channels.*;
@@ -61,10 +59,10 @@ class PipeImpl
     private static final Random RANDOM_NUMBER_GENERATOR = new SecureRandom();
 
     // Source and sink channels
-    private final SourceChannel source;
-    private final SinkChannel sink;
+    private final SourceChannelImpl source;
+    private final SinkChannelImpl sink;
 
-    private class Initializer
+    private static class Initializer
         implements PrivilegedExceptionAction<Void>
     {
 
@@ -164,10 +162,6 @@ class PipeImpl
                     try {
                         if (ssc != null)
                             ssc.close();
-                        if (sa instanceof UnixDomainSocketAddress) {
-                            Path path = ((UnixDomainSocketAddress) sa).getPath();
-                            Files.deleteIfExists(path);
-                        }
                     } catch (IOException e2) {}
                 }
             }
@@ -184,10 +178,10 @@ class PipeImpl
     /**
      * Creates Pipe implementation that supports optionally buffering.
      *
-     * @implNote The pipe uses Unix domain sockets where possible. It uses a
-     * loopback connection on older editions of Windows. When buffering is
+     * @implNote Uses a loopback connection. When buffering is
      * disabled then it sets TCP_NODELAY on the sink channel.
      */
+    @SuppressWarnings("removal")
     PipeImpl(SelectorProvider sp, boolean buffering) throws IOException {
         Initializer initializer = new Initializer(sp);
         try {
@@ -203,31 +197,16 @@ class PipeImpl
         this.sink = initializer.sink;
     }
 
-    public SourceChannel source() {
+    public SourceChannelImpl source() {
         return source;
     }
 
-    public SinkChannel sink() {
+    public SinkChannelImpl sink() {
         return sink;
     }
 
-    private static volatile boolean noUnixDomainSockets;
-
     private static ServerSocketChannel createListener() throws IOException {
-        ServerSocketChannel listener = null;
-        if (!noUnixDomainSockets) {
-            try {
-                listener = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
-                return listener.bind(null);
-            } catch (UnsupportedOperationException | IOException e) {
-                // IOException is most likely to be caused by the temporary directory
-                // name being too long. Possibly should log this.
-                noUnixDomainSockets = true;
-                if (listener != null)
-                    listener.close();
-            }
-        }
-        listener = ServerSocketChannel.open();
+        ServerSocketChannel listener = ServerSocketChannel.open();
         InetAddress lb = InetAddress.getLoopbackAddress();
         listener.bind(new InetSocketAddress(lb, 0));
         return listener;

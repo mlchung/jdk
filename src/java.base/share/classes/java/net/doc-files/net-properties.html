@@ -1,6 +1,6 @@
 <!DOCTYPE HTML>
 <!--
- Copyright (c) 1998, 2020, Oracle and/or its affiliates. All rights reserved.
+ Copyright (c) 1998, 2021, Oracle and/or its affiliates. All rights reserved.
  DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 
  This code is free software; you can redistribute it and/or modify it
@@ -61,7 +61,7 @@ If there is no special note, a property value is checked every time it is used.<
 	(e.g. 192.168.1.1). This property can be set to <B>true</B> to
 	change that preference and use IPv6 addresses over IPv4 ones where
 	possible, or <B>system</B> to preserve the order of the addresses as
-    returned by the operating system.</P>
+    returned by the system-wide {@linkplain java.net.spi.InetAddressResolver resolver}.</P>
 </UL>
 <P>Both of these properties are checked only once, at startup.</P>
 <a id="Proxies"></a>
@@ -255,7 +255,6 @@ bytes (depending on the platform), it is important to ensure that the temporary 
 together with the filename used for the socket (currently a name similar to
 {@code socket_1679697142}) does not exceed this limit. The following properties
 can be used to control the selection of this directory:
-<p>
 <ul>
 	<li><p><b>{@systemProperty jdk.net.unixdomain.tmpdir}</b> This can be set as 
 	a networking property in {@code conf/net.properties} If set, this specifies the 

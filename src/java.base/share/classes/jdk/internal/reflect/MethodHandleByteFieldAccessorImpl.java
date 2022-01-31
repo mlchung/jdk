@@ -26,19 +26,29 @@
 package jdk.internal.reflect;
 
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.WrongMethodTypeException;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 
-import static java.lang.invoke.MethodType.methodType;
+class MethodHandleByteFieldAccessorImpl extends MethodHandleFieldAccessorImpl {
+    static FieldAccessorImpl fieldAccessor(Field field, MethodHandle getter, MethodHandle setter, boolean isReadOnly) {
+        boolean isStatic = Modifier.isStatic(field.getModifiers());
+        if (isStatic) {
+            getter = getter.asType(MethodType.methodType(byte.class));
+            if (setter != null) {
+                setter = setter.asType(MethodType.methodType(void.class, byte.class));
+            }
+        } else {
+            getter = getter.asType(MethodType.methodType(byte.class, Object.class));
+            if (setter != null) {
+                setter = setter.asType(MethodType.methodType(void.class, Object.class, byte.class));
+            }
+        }
+        return new MethodHandleByteFieldAccessorImpl(field, getter, setter, isReadOnly, isStatic);
+    }
 
-final class MethodHandleByteFieldAccessorImpl extends MethodHandleFieldAccessorImpl {
-    private final MethodHandle getter_B;
-    private final MethodHandle setter_B;
-    MethodHandleByteFieldAccessorImpl(Field field, MethodHandle getter, MethodHandle setter) {
-        super(field, getter, setter);
-        this.getter_B = getter.asType(methodType(byte.class, Object.class));
-        this.setter_B = setter != null ? setter.asType(methodType(void.class, Object.class, byte.class))
-                                       : null;
+    MethodHandleByteFieldAccessorImpl(Field field, MethodHandle getter, MethodHandle setter, boolean isReadOnly, boolean isStatic) {
+        super(field, getter, setter, isReadOnly, isStatic);
     }
 
     public Object get(Object obj) throws IllegalArgumentException {
@@ -50,13 +60,16 @@ final class MethodHandleByteFieldAccessorImpl extends MethodHandleFieldAccessorI
     }
 
     public byte getByte(Object obj) throws IllegalArgumentException {
-        ensureObj(obj);
         try {
-            return (byte)getter_B.invokeExact(obj);
-        } catch (IllegalArgumentException e) {
+            if (isStatic()) {
+                return (byte) getter.invokeExact();
+            } else {
+                return (byte) getter.invokeExact(obj);
+            }
+        } catch (IllegalArgumentException|NullPointerException e) {
             throw e;
-        } catch (ClassCastException|NullPointerException e) {
-            throw new IllegalArgumentException(e.getMessage(), e);
+        } catch (ClassCastException e) {
+            throw newGetIllegalArgumentException(obj);
         } catch (Throwable e) {
             throw new InternalError(e);
         }
@@ -86,6 +99,25 @@ final class MethodHandleByteFieldAccessorImpl extends MethodHandleFieldAccessorI
         return getByte(obj);
     }
 
+    public void set(Object obj, Object value)
+            throws IllegalArgumentException, IllegalAccessException
+    {
+        ensureObj(obj);
+        if (isReadOnly()) {
+            throwFinalFieldIllegalAccessException(value);
+        }
+
+        if (value == null) {
+            throwSetIllegalArgumentException(value);
+        }
+
+        if (value instanceof Byte b) {
+            setByte(obj, b.byteValue());
+        } else {
+            throwSetIllegalArgumentException(value);
+        }
+    }
+
     public void setBoolean(Object obj, boolean z)
         throws IllegalArgumentException, IllegalAccessException
     {
@@ -95,19 +127,21 @@ final class MethodHandleByteFieldAccessorImpl extends MethodHandleFieldAccessorI
     public void setByte(Object obj, byte b)
         throws IllegalArgumentException, IllegalAccessException
     {
-        ensureObj(obj);
-        if (isReadOnly) {
+        if (isReadOnly()) {
+            ensureObj(obj);     // throw NPE if obj is null on instance field
             throwFinalFieldIllegalAccessException(b);
         }
         try {
-            setter_B.invokeExact(obj, b);
-        } catch (IllegalArgumentException e) {
+            if (isStatic()) {
+                setter.invokeExact(b);
+            } else {
+                setter.invokeExact(obj, b);
+            }
+        } catch (IllegalArgumentException|NullPointerException e) {
             throw e;
-        } catch (ClassCastException|NullPointerException e) {
-            throw new IllegalArgumentException(e.getMessage(), e);
-        } catch (WrongMethodTypeException e) {
-            e.printStackTrace();
-            throwSetIllegalArgumentException(b);
+        } catch (ClassCastException e) {
+            // receiver is of invalid type
+            throw newSetIllegalArgumentException(obj);
         } catch (Throwable e) {
             throw new InternalError(e);
         }

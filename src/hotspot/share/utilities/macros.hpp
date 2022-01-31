@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -126,9 +126,11 @@
 #if INCLUDE_MANAGEMENT
 #define NOT_MANAGEMENT_RETURN        /* next token must be ; */
 #define NOT_MANAGEMENT_RETURN_(code) /* next token must be ; */
+#define MANAGEMENT_ONLY(x) x
 #else
 #define NOT_MANAGEMENT_RETURN        {}
 #define NOT_MANAGEMENT_RETURN_(code) { return code; }
+#define MANAGEMENT_ONLY(x)
 #endif // INCLUDE_MANAGEMENT
 
 #ifndef INCLUDE_EPSILONGC
@@ -239,22 +241,6 @@
 #define NOT_ZGC_RETURN_(code) { return code; }
 #endif // INCLUDE_ZGC
 
-#ifndef INCLUDE_NMT
-#define INCLUDE_NMT 1
-#endif // INCLUDE_NMT
-
-#if INCLUDE_NMT
-#define NOT_NMT_RETURN        /* next token must be ; */
-#define NOT_NMT_RETURN_(code) /* next token must be ; */
-#define NMT_ONLY(x) x
-#define NOT_NMT(x)
-#else
-#define NOT_NMT_RETURN        {}
-#define NOT_NMT_RETURN_(code) { return code; }
-#define NMT_ONLY(x)
-#define NOT_NMT(x) x
-#endif // INCLUDE_NMT
-
 #ifndef INCLUDE_JFR
 #define INCLUDE_JFR 1
 #endif
@@ -273,14 +259,6 @@
 #define INCLUDE_JVMCI 1
 #endif
 
-#ifndef INCLUDE_AOT
-#define INCLUDE_AOT 1
-#endif
-
-#if INCLUDE_AOT && !INCLUDE_JVMCI
-#  error "Must have JVMCI for AOT"
-#endif
-
 #if INCLUDE_JVMCI
 #define JVMCI_ONLY(code) code
 #define NOT_JVMCI(code)
@@ -290,16 +268,6 @@
 #define NOT_JVMCI(code) code
 #define NOT_JVMCI_RETURN {}
 #endif // INCLUDE_JVMCI
-
-#if INCLUDE_AOT
-#define AOT_ONLY(code) code
-#define NOT_AOT(code)
-#define NOT_AOT_RETURN /* next token must be ; */
-#else
-#define AOT_ONLY(code)
-#define NOT_AOT(code) code
-#define NOT_AOT_RETURN {}
-#endif // INCLUDE_AOT
 
 // COMPILER1 variant
 #ifdef COMPILER1
@@ -568,6 +536,8 @@
 #define AARCH64_ONLY(code)
 #define NOT_AARCH64(code) code
 #endif
+
+#define MACOS_AARCH64_ONLY(x) MACOS_ONLY(AARCH64_ONLY(x))
 
 #ifdef VM_LITTLE_ENDIAN
 #define LITTLE_ENDIAN_ONLY(code) code

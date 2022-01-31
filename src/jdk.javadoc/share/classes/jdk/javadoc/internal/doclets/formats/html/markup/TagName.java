@@ -35,7 +35,7 @@ import jdk.javadoc.internal.doclets.toolkit.util.Utils;
  *  This code and its internal interfaces are subject to change or
  *  deletion without notice.</b>
  *
- * @see <a href=""https://html.spec.whatwg.org/multipage/syntax.html#syntax-tag-name>WhatWG: Tag Name</a>
+ * @see <a href="https://html.spec.whatwg.org/multipage/syntax.html#syntax-tag-name">WhatWG: Tag Name</a>
  * @see <a href="https://www.w3.org/TR/html51/syntax.html#tag-name">HTML 5.1: Tag Name</a>
  */
 public enum TagName {
@@ -47,6 +47,7 @@ public enum TagName {
     CAPTION,
     CODE,
     DD,
+    DETAILS,
     DIV,
     DL,
     DT,
@@ -83,6 +84,7 @@ public enum TagName {
     SPAN,
     STRONG,
     SUB,
+    SUMMARY,
     SUP,
     TABLE,
     TBODY,
@@ -91,7 +93,8 @@ public enum TagName {
     TH,
     TITLE,
     TR,
-    UL;
+    UL,
+    WBR;
 
     public final String value;
 

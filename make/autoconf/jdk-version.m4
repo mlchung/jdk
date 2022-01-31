@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -68,6 +68,17 @@ AC_DEFUN_ONCE([JDKVER_SETUP_JDK_VERSION_NUMBERS],
   AC_SUBST(PRODUCT_SUFFIX)
   AC_SUBST(JDK_RC_PLATFORM_NAME)
   AC_SUBST(HOTSPOT_VM_DISTRO)
+
+  # Setup username (for use in adhoc version strings etc)
+  AC_ARG_WITH([build-user], [AS_HELP_STRING([--with-build-user],
+      [build username to use in version strings])])
+  if test "x$with_build_user" != x; then
+    USERNAME="$with_build_user"
+  else
+    # Outer [ ] to quote m4.
+    [ USERNAME=`$ECHO "$USER" | $TR -d -c '[a-z][A-Z][0-9]'` ]
+  fi
+  AC_SUBST(USERNAME)
 
   # Set the JDK RC name
   AC_ARG_WITH(jdk-rc-name, [AS_HELP_STRING([--with-jdk-rc-name],
@@ -525,7 +536,7 @@ AC_DEFUN_ONCE([JDKVER_SETUP_JDK_VERSION_NUMBERS],
     MACOSX_BUNDLE_BUILD_VERSION="$VERSION_BUILD"
     # If VERSION_OPT consists of only numbers and periods, add it.
     if [ [[ $VERSION_OPT =~ ^[0-9\.]+$ ]] ]; then
-      MACOSX_BUNDLE_BUILD_VERSION+=".$VERSION_OPT"
+      MACOSX_BUNDLE_BUILD_VERSION="$MACOSX_BUNDLE_BUILD_VERSION.$VERSION_OPT"
     fi
   fi
   AC_SUBST(MACOSX_BUNDLE_BUILD_VERSION)
@@ -533,6 +544,7 @@ AC_DEFUN_ONCE([JDKVER_SETUP_JDK_VERSION_NUMBERS],
   # We could define --with flags for these, if really needed
   VERSION_CLASSFILE_MAJOR="$DEFAULT_VERSION_CLASSFILE_MAJOR"
   VERSION_CLASSFILE_MINOR="$DEFAULT_VERSION_CLASSFILE_MINOR"
+  VERSION_DOCS_API_SINCE="$DEFAULT_VERSION_DOCS_API_SINCE"
   JDK_SOURCE_TARGET_VERSION="$DEFAULT_JDK_SOURCE_TARGET_VERSION"
 
   AC_MSG_CHECKING([for version string])
@@ -557,5 +569,6 @@ AC_DEFUN_ONCE([JDKVER_SETUP_JDK_VERSION_NUMBERS],
   AC_SUBST(VENDOR_VERSION_STRING)
   AC_SUBST(VERSION_CLASSFILE_MAJOR)
   AC_SUBST(VERSION_CLASSFILE_MINOR)
+  AC_SUBST(VERSION_DOCS_API_SINCE)
   AC_SUBST(JDK_SOURCE_TARGET_VERSION)
 ])

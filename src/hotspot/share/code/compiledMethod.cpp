@@ -36,6 +36,8 @@
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 #include "memory/resourceArea.hpp"
+#include "oops/compiledICHolder.inline.hpp"
+#include "oops/klass.inline.hpp"
 #include "oops/methodData.hpp"
 #include "oops/method.inline.hpp"
 #include "prims/methodHandles.hpp"
@@ -70,7 +72,6 @@ CompiledMethod::CompiledMethod(Method* method, const char* name, CompilerType ty
 
 void CompiledMethod::init_defaults() {
   { // avoid uninitialized fields, even for short time periods
-    _is_far_code                = false;
     _scopes_data_begin          = NULL;
     _deopt_handler_begin        = NULL;
     _deopt_mh_handler_begin     = NULL;
@@ -477,6 +478,10 @@ bool CompiledMethod::clean_ic_if_metadata_is_dead(CompiledIC *ic) {
       } else {
         ShouldNotReachHere();
       }
+    } else {
+      // This inline cache is a megamorphic vtable call. Those ICs never hold
+      // any Metadata and should therefore never be cleaned by this function.
+      return true;
     }
   }
 

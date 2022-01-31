@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,8 +38,8 @@ import jdk.jfr.internal.consumer.ChunkParser.ParserConfiguration;
 
 final class Dispatcher {
 
-    final static class EventDispatcher {
-        private final static EventDispatcher[] NO_DISPATCHERS = new EventDispatcher[0];
+    static final class EventDispatcher {
+        private static final EventDispatcher[] NO_DISPATCHERS = new EventDispatcher[0];
 
         private final String eventName;
         private final Consumer<RecordedEvent> action;
@@ -160,6 +160,7 @@ final class Dispatcher {
                 dispatcherLookup.put(type.getId(), dispatchers);
             }
             cacheDispatchers = dispatchers;
+            cacheEventType = type;
         }
         // Expected behavior if exception occurs in onEvent:
         //

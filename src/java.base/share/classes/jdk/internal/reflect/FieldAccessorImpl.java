@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,9 +34,9 @@ import java.lang.reflect.Modifier;
 
 abstract class FieldAccessorImpl extends MagicAccessorImpl
     implements FieldAccessor {
-    protected final Field   field;
+    protected final Field field;
 
-    protected FieldAccessorImpl(Field field) {
+    FieldAccessorImpl(Field field) {
         this.field = field;
     }
 
@@ -120,7 +120,7 @@ abstract class FieldAccessorImpl extends MagicAccessorImpl
         }
     }
 
-    private String getQualifiedFieldName() {
+    protected String getQualifiedFieldName() {
         return field.getDeclaringClass().getName() + "." +field.getName();
     }
 
@@ -135,8 +135,8 @@ abstract class FieldAccessorImpl extends MagicAccessorImpl
                                                          String attemptedValue)
             throws IllegalAccessException {
         throw new IllegalAccessException(getSetMessage(attemptedType, attemptedValue));
-
     }
+
     protected void throwFinalFieldIllegalAccessException(Object o) throws IllegalAccessException {
         throwFinalFieldIllegalAccessException(o != null ? o.getClass().getName() : "", "");
     }

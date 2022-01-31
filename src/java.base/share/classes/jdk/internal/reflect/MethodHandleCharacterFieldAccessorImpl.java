@@ -26,20 +26,31 @@
 package jdk.internal.reflect;
 
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.WrongMethodTypeException;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
-
-import static java.lang.invoke.MethodType.methodType;
+import java.lang.reflect.Modifier;
 
 class MethodHandleCharacterFieldAccessorImpl extends MethodHandleFieldAccessorImpl {
-    private final MethodHandle getter_C;
-    private final MethodHandle setter_C;
-    MethodHandleCharacterFieldAccessorImpl(Field field, MethodHandle getter, MethodHandle setter) {
-        super(field, getter, setter);
-        this.getter_C = getter.asType(methodType(char.class, Object.class));
-        this.setter_C = setter != null ? setter.asType(methodType(void.class, Object.class, char.class))
-                : null;
+    static FieldAccessorImpl fieldAccessor(Field field, MethodHandle getter, MethodHandle setter, boolean isReadOnly) {
+        boolean isStatic = Modifier.isStatic(field.getModifiers());
+        if (isStatic) {
+            getter = getter.asType(MethodType.methodType(char.class));
+            if (setter != null) {
+                setter = setter.asType(MethodType.methodType(void.class, char.class));
+            }
+        } else {
+            getter = getter.asType(MethodType.methodType(char.class, Object.class));
+            if (setter != null) {
+                setter = setter.asType(MethodType.methodType(void.class, Object.class, char.class));
+            }
+        }
+        return new MethodHandleCharacterFieldAccessorImpl(field, getter, setter, isReadOnly, isStatic);
     }
+
+    MethodHandleCharacterFieldAccessorImpl(Field field, MethodHandle getter, MethodHandle setter, boolean isReadOnly, boolean isStatic) {
+        super(field, getter, setter, isReadOnly, isStatic);
+    }
+
     public Object get(Object obj) throws IllegalArgumentException {
         return Character.valueOf(getChar(obj));
     }
@@ -53,16 +64,20 @@ class MethodHandleCharacterFieldAccessorImpl extends MethodHandleFieldAccessorIm
     }
 
     public char getChar(Object obj) throws IllegalArgumentException {
-        ensureObj(obj);
         try {
-            return (char) getter_C.invokeExact(obj);
-        } catch (IllegalArgumentException e) {
+            if (isStatic()) {
+                return (char) getter.invokeExact();
+            } else {
+                return (char) getter.invokeExact(obj);
+            }
+        } catch (IllegalArgumentException|NullPointerException e) {
             throw e;
-        } catch (ClassCastException|NullPointerException e) {
-            throw new IllegalArgumentException(e.getMessage(), e);
+        } catch (ClassCastException e) {
+            throw newGetIllegalArgumentException(obj);
         } catch (Throwable e) {
             throw new InternalError(e);
-        }    }
+        }
+    }
 
     public short getShort(Object obj) throws IllegalArgumentException {
         throw newGetShortIllegalArgumentException();
@@ -84,6 +99,25 @@ class MethodHandleCharacterFieldAccessorImpl extends MethodHandleFieldAccessorIm
         return getChar(obj);
     }
 
+    public void set(Object obj, Object value)
+            throws IllegalArgumentException, IllegalAccessException
+    {
+        ensureObj(obj);
+        if (isReadOnly()) {
+            throwFinalFieldIllegalAccessException(value);
+        }
+
+        if (value == null) {
+            throwSetIllegalArgumentException(value);
+        }
+
+        if (value instanceof Character c) {
+            setChar(obj, c.charValue());
+        } else {
+            throwSetIllegalArgumentException(value);
+        }
+    }
+
     public void setBoolean(Object obj, boolean z)
         throws IllegalArgumentException, IllegalAccessException
     {
@@ -99,19 +133,21 @@ class MethodHandleCharacterFieldAccessorImpl extends MethodHandleFieldAccessorIm
     public void setChar(Object obj, char c)
         throws IllegalArgumentException, IllegalAccessException
     {
-        ensureObj(obj);
-        if (isReadOnly) {
+        if (isReadOnly()) {
+            ensureObj(obj);     // throw NPE if obj is null on instance field
             throwFinalFieldIllegalAccessException(c);
         }
         try {
-            setter_C.invokeExact(obj, c);
-        } catch (IllegalArgumentException e) {
+            if (isStatic()) {
+                setter.invokeExact(c);
+            } else {
+                setter.invokeExact(obj, c);
+            }
+        } catch (IllegalArgumentException|NullPointerException e) {
             throw e;
-        } catch (ClassCastException|NullPointerException e) {
-            throw new IllegalArgumentException(e.getMessage(), e);
-        } catch (WrongMethodTypeException e) {
-            e.printStackTrace();
-            throwSetIllegalArgumentException(c);
+        } catch (ClassCastException e) {
+            // receiver is of invalid type
+            throw newSetIllegalArgumentException(obj);
         } catch (Throwable e) {
             throw new InternalError(e);
         }

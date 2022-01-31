@@ -40,7 +40,7 @@ import static java.lang.annotation.ElementType.*;
 public @interface CallerSensitive {
     public enum Option {
         /**
-         * Caller class
+         * Access class
          */
         ACCESS_CHECK,
         /**
@@ -63,6 +63,10 @@ public @interface CallerSensitive {
          * The annotated method is a non-static and non-final caller-sensitive method
          */
         NON_STATIC_NON_FINAL,
+        /**
+         * Native access
+         */
+        NATIVE_ACCESS,
         /**
          * The annotated method is for internal use only
          */

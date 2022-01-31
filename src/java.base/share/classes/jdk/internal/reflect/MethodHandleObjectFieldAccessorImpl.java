@@ -26,12 +26,42 @@
 package jdk.internal.reflect;
 
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.WrongMethodTypeException;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 
 class MethodHandleObjectFieldAccessorImpl extends MethodHandleFieldAccessorImpl {
-    MethodHandleObjectFieldAccessorImpl(Field field, MethodHandle getter, MethodHandle setter) {
-        super(field, getter, setter);
+    static FieldAccessorImpl fieldAccessor(Field field, MethodHandle getter, MethodHandle setter, boolean isReadOnly) {
+        boolean isStatic = Modifier.isStatic(field.getModifiers());
+        if (isStatic) {
+            getter = getter.asType(MethodType.methodType(Object.class));
+            if (setter != null) {
+                setter = setter.asType(MethodType.methodType(void.class, Object.class));
+            }
+        } else {
+            getter = getter.asType(MethodType.methodType(Object.class, Object.class));
+            if (setter != null) {
+                setter = setter.asType(MethodType.methodType(void.class, Object.class, Object.class));
+            }
+        }
+        return new MethodHandleObjectFieldAccessorImpl(field, getter, setter, isReadOnly, isStatic);
+    }
+
+    MethodHandleObjectFieldAccessorImpl(Field field, MethodHandle getter, MethodHandle setter, boolean isReadOnly, boolean isStatic) {
+        super(field, getter, setter, isReadOnly, isStatic);
+    }
+
+    @Override
+    public Object get(Object obj) throws IllegalArgumentException {
+        try {
+            return isStatic() ? getter.invokeExact() : getter.invokeExact(obj);
+        } catch (IllegalArgumentException|NullPointerException e) {
+            throw e;
+        } catch (ClassCastException e) {
+            throw newGetIllegalArgumentException(obj);
+        } catch (Throwable e) {
+            throw new InternalError(e);
+        }
     }
 
     public boolean getBoolean(Object obj) throws IllegalArgumentException {
@@ -69,17 +99,19 @@ class MethodHandleObjectFieldAccessorImpl extends MethodHandleFieldAccessorImpl 
     @Override
     public void set(Object obj, Object value) throws IllegalAccessException {
         ensureObj(obj);
-        if (isReadOnly) {
+        if (isReadOnly()) {
             throwFinalFieldIllegalAccessException(value);
         }
         try {
-            setter.invoke(obj, value);
-        } catch (IllegalArgumentException e) {
+            if (isStatic()) {
+                setter.invokeExact(value);
+            } else {
+                setter.invokeExact(obj, value);
+            }
+        } catch (IllegalArgumentException|NullPointerException e) {
             throw e;
-        } catch (ClassCastException | NullPointerException e) {
-            throw new IllegalArgumentException(e.getMessage(), e);
-        } catch (WrongMethodTypeException e) {
-            e.printStackTrace();
+        } catch (ClassCastException e) {
+            // already ensure the receiver type.  So this CCE is due to the value.
             throwSetIllegalArgumentException(value);
         } catch (Throwable e) {
             throw new InternalError(e);

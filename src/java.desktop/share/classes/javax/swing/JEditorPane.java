@@ -41,6 +41,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.ObjectOutputStream;
+import java.io.OutputStream;
 import java.io.Reader;
 import java.io.Serial;
 import java.io.StringReader;
@@ -852,16 +853,12 @@ public class JEditorPane extends JTextComponent {
     private void handlePostData(HttpURLConnection conn, Object postData)
                                                             throws IOException {
         conn.setDoOutput(true);
-        DataOutputStream os = null;
-        try {
-            conn.setRequestProperty("Content-Type",
-                    "application/x-www-form-urlencoded");
-            os = new DataOutputStream(conn.getOutputStream());
-            os.writeBytes((String) postData);
-        } finally {
-            if (os != null) {
-                os.close();
-            }
+        conn.setRequestProperty("Content-Type",
+                "application/x-www-form-urlencoded");
+        try (OutputStream os = conn.getOutputStream();
+             DataOutputStream dos = new DataOutputStream(os))
+        {
+            dos.writeBytes((String)postData);
         }
     }
 
@@ -1621,7 +1618,7 @@ public class JEditorPane extends JTextComponent {
 
     /**
      * Key for a client property used to indicate whether
-     * <a href="http://www.w3.org/TR/CSS21/syndata.html#length-units">
+     * <a href="https://www.w3.org/TR/CSS22/syndata.html#length-units">
      * w3c compliant</a> length units are used for html rendering.
      * <p>
      * By default this is not enabled; to enable
@@ -2061,7 +2058,7 @@ public class JEditorPane extends JTextComponent {
         }
 
         /**
-         * Make one of these puppies
+         * Constructs a {@code JEditorPaneAccessibleHypertextSupport}.
          */
         public JEditorPaneAccessibleHypertextSupport() {
             hyperlinks = new LinkVector();

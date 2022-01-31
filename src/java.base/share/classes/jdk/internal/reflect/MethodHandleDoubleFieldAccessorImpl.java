@@ -26,19 +26,29 @@
 package jdk.internal.reflect;
 
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.WrongMethodTypeException;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
-
-import static java.lang.invoke.MethodType.methodType;
+import java.lang.reflect.Modifier;
 
 class MethodHandleDoubleFieldAccessorImpl extends MethodHandleFieldAccessorImpl {
-    private final MethodHandle getter_D;
-    private final MethodHandle setter_D;
-    MethodHandleDoubleFieldAccessorImpl(Field field, MethodHandle getter, MethodHandle setter) {
-        super(field, getter, setter);
-        this.getter_D = getter.asType(methodType(double.class, Object.class));
-        this.setter_D = setter != null ? setter.asType(methodType(void.class, Object.class, double.class))
-                : null;
+    static FieldAccessorImpl fieldAccessor(Field field, MethodHandle getter, MethodHandle setter, boolean isReadOnly) {
+        boolean isStatic = Modifier.isStatic(field.getModifiers());
+        if (isStatic) {
+            getter = getter.asType(MethodType.methodType(double.class));
+            if (setter != null) {
+                setter = setter.asType(MethodType.methodType(void.class, double.class));
+            }
+        } else {
+            getter = getter.asType(MethodType.methodType(double.class, Object.class));
+            if (setter != null) {
+                setter = setter.asType(MethodType.methodType(void.class, Object.class, double.class));
+            }
+        }
+        return new MethodHandleDoubleFieldAccessorImpl(field, getter, setter, isReadOnly, isStatic);
+    }
+
+    MethodHandleDoubleFieldAccessorImpl(Field field, MethodHandle getter, MethodHandle setter, boolean isReadOnly, boolean isStatic) {
+        super(field, getter, setter, isReadOnly, isStatic);
     }
 
     public Object get(Object obj) throws IllegalArgumentException {
@@ -74,15 +84,56 @@ class MethodHandleDoubleFieldAccessorImpl extends MethodHandleFieldAccessorImpl 
     }
 
     public double getDouble(Object obj) throws IllegalArgumentException {
-        ensureObj(obj);
         try {
-            return (double) getter_D.invokeExact(obj);
-        } catch (IllegalArgumentException e) {
+            if (isStatic()) {
+                return (double) getter.invokeExact();
+            } else {
+                return (double) getter.invokeExact(obj);
+            }
+        } catch (IllegalArgumentException|NullPointerException e) {
             throw e;
-        } catch (ClassCastException|NullPointerException e) {
-            throw new IllegalArgumentException(e.getMessage(), e);
+        } catch (ClassCastException e) {
+            throw newGetIllegalArgumentException(obj);
         } catch (Throwable e) {
             throw new InternalError(e);
+        }
+    }
+
+    public void set(Object obj, Object value)
+            throws IllegalArgumentException, IllegalAccessException
+    {
+        ensureObj(obj);
+        if (isReadOnly()) {
+            throwFinalFieldIllegalAccessException(value);
+        }
+
+        if (value == null) {
+            throwSetIllegalArgumentException(value);
+        }
+
+        if (value instanceof Byte b) {
+            setDouble(obj, b.byteValue());
+        }
+        else if (value instanceof Short s) {
+            setDouble(obj, s.shortValue());
+        }
+        else if (value instanceof Character c) {
+            setDouble(obj, c.charValue());
+        }
+        else if (value instanceof Integer i) {
+            setDouble(obj, i.intValue());
+        }
+        else if (value instanceof Long l) {
+            setDouble(obj, l.longValue());
+        }
+        else if (value instanceof Float f) {
+            setDouble(obj, f.floatValue());
+        }
+        else if (value instanceof Double d) {
+            setDouble(obj, d.doubleValue());
+        }
+        else {
+            throwSetIllegalArgumentException(value);
         }
     }
 
@@ -131,19 +182,21 @@ class MethodHandleDoubleFieldAccessorImpl extends MethodHandleFieldAccessorImpl 
     public void setDouble(Object obj, double d)
         throws IllegalArgumentException, IllegalAccessException
     {
-        ensureObj(obj);
-        if (isReadOnly) {
+        if (isReadOnly()) {
+            ensureObj(obj);     // throw NPE if obj is null on instance field
             throwFinalFieldIllegalAccessException(d);
         }
         try {
-            setter_D.invokeExact(obj, d);
-        } catch (IllegalArgumentException e) {
+            if (isStatic()) {
+                setter.invokeExact(d);
+            } else {
+                setter.invokeExact(obj, d);
+            }
+        } catch (IllegalArgumentException|NullPointerException e) {
             throw e;
-        } catch (ClassCastException|NullPointerException e) {
-            throw new IllegalArgumentException(e.getMessage(), e);
-        } catch (WrongMethodTypeException e) {
-            e.printStackTrace();
-            throwSetIllegalArgumentException(d);
+        } catch (ClassCastException e) {
+            // receiver is of invalid type
+            throw newSetIllegalArgumentException(obj);
         } catch (Throwable e) {
             throw new InternalError(e);
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,13 +25,16 @@
 
 package java.nio.channels;
 
-import java.io.*;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.spi.AbstractInterruptibleChannel;
-import java.nio.file.*;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.OpenOption;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileAttribute;
-import java.nio.file.spi.*;
+import java.nio.file.spi.FileSystemProvider;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.Collections;
@@ -270,6 +273,12 @@ public abstract class FileChannel
      *          support creating file channels, or an unsupported open option is
      *          specified, or the array contains an attribute that cannot be set
      *          atomically when creating the file
+     * @throws  FileAlreadyExistsException
+     *          If a file of that name already exists and the {@link
+     *          StandardOpenOption#CREATE_NEW CREATE_NEW} option is specified
+     *          and the file is being opened for writing
+     *          <i>(<a href="../file/package-summary.html#optspecex">optional
+     *          specific exception</a>)</i>
      * @throws  IOException
      *          If an I/O error occurs
      * @throws  SecurityException
@@ -319,6 +328,12 @@ public abstract class FileChannel
      *          If the {@code path} is associated with a provider that does not
      *          support creating file channels, or an unsupported open option is
      *          specified
+     * @throws  FileAlreadyExistsException
+     *          If a file of that name already exists and the {@link
+     *          StandardOpenOption#CREATE_NEW CREATE_NEW} option is specified
+     *          and the file is being opened for writing
+     *          <i>(<a href="../file/package-summary.html#optspecex">optional
+     *          specific exception</a>)</i>
      * @throws  IOException
      *          If an I/O error occurs
      * @throws  SecurityException
@@ -391,6 +406,9 @@ public abstract class FileChannel
      * with the number of bytes actually written.  Otherwise this method
      * behaves exactly as specified by the {@link WritableByteChannel}
      * interface. </p>
+     *
+     * @throws  NonWritableChannelException
+     *          If this channel was not opened for writing
      */
     public abstract int write(ByteBuffer src) throws IOException;
 
@@ -405,6 +423,9 @@ public abstract class FileChannel
      * with the number of bytes actually written.  Otherwise this method
      * behaves exactly as specified in the {@link GatheringByteChannel}
      * interface.  </p>
+     *
+     * @throws  NonWritableChannelException
+     *          If this channel was not opened for writing
      */
     public abstract long write(ByteBuffer[] srcs, int offset, int length)
         throws IOException;
@@ -419,6 +440,9 @@ public abstract class FileChannel
      * with the number of bytes actually written.  Otherwise this method
      * behaves exactly as specified in the {@link GatheringByteChannel}
      * interface.  </p>
+     *
+     * @throws  NonWritableChannelException
+     *          If this channel was not opened for writing
      */
     public final long write(ByteBuffer[] srcs) throws IOException {
         return write(srcs, 0, srcs.length);
@@ -542,8 +566,11 @@ public abstract class FileChannel
      * actually done is system-dependent and is therefore unspecified.
      *
      * <p> This method is only guaranteed to force changes that were made to
-     * this channel's file via the methods defined in this class.  It may or
-     * may not force changes that were made by modifying the content of a
+     * this channel's file via the methods defined in this class, or the methods
+     * defined by {@link java.io.FileOutputStream} or
+     * {@link java.io.RandomAccessFile} when the channel was obtained with the
+     * {@code getChannel} method. It may or may not force changes that were made
+     * by modifying the content of a
      * {@link MappedByteBuffer <i>mapped byte buffer</i>} obtained by
      * invoking the {@link #map map} method.  Invoking the {@link
      * MappedByteBuffer#force force} method of the mapped byte buffer will
@@ -642,7 +669,8 @@ public abstract class FileChannel
      * number of bytes will be transferred if the source channel has fewer than
      * {@code count} bytes remaining, or if the source channel is non-blocking
      * and has fewer than {@code count} bytes immediately available in its
-     * input buffer.
+     * input buffer. No bytes are transferred, and zero is returned, if the
+     * source has reached end-of-stream.
      *
      * <p> This method does not modify this channel's position.  If the given
      * position is greater than the file's current size then no bytes are
@@ -1017,7 +1045,7 @@ public abstract class FileChannel
      *          region
      *
      * @throws  NonReadableChannelException
-     *          If {@code shared} is {@code true} this channel was not
+     *          If {@code shared} is {@code true} but this channel was not
      *          opened for reading
      *
      * @throws  NonWritableChannelException
@@ -1135,6 +1163,14 @@ public abstract class FileChannel
      *          blocked in this method and is attempting to lock an overlapping
      *          region of the same file
      *
+     * @throws  NonReadableChannelException
+     *          If {@code shared} is {@code true} but this channel was not
+     *          opened for reading
+     *
+     * @throws  NonWritableChannelException
+     *          If {@code shared} is {@code false} but this channel was not
+     *          opened for writing
+     *
      * @throws  IOException
      *          If some other I/O error occurs
      *
@@ -1166,6 +1202,9 @@ public abstract class FileChannel
      *          this Java virtual machine, or if another thread is already
      *          blocked in this method and is attempting to lock an overlapping
      *          region
+     *
+     * @throws  NonWritableChannelException
+     *          If this channel was not opened for writing
      *
      * @throws  IOException
      *          If some other I/O error occurs
