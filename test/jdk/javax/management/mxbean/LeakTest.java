@@ -27,8 +27,13 @@
  * @requires vm.opt.final.ClassUnloading
  * @author Eamonn McManus
  *
+ * @library /test/lib
+ * @build jdk.test.whitebox.WhiteBox
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
  * @run build LeakTest RandomMXBeanTest MerlinMXBean TigerMXBean
- * @run main LeakTest
+ * @run main/othervm
+ *    -Xbootclasspath/a:.
+ *    -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI LeakTest
  */
 
 /* In this test we create a ClassLoader, then use it to load and run another
@@ -39,6 +44,8 @@
  *
  * This test can be applied to any jtreg test, not just the MXBean tests.
  */
+
+import jdk.test.whitebox.WhiteBox;
 
 import java.io.File;
 import java.lang.ref.Reference;
@@ -73,6 +80,8 @@ public class LeakTest {
                 "by caches in the MXBean infrastructure");
         for (Class<?> testClass : otherTests)
             test(testClass);
+//        System.out.println("fail to unload " + failure);
+//        System.console().readLine();
         if (failure != null)
             throw new Exception("CLASSLOADER LEAK TEST FAILED: " + failure);
         System.out.println("CLASSLOADER LEAK TEST PASSED");
@@ -82,6 +91,7 @@ public class LeakTest {
         }
     }
 
+    private static final WhiteBox WB = WhiteBox.getWhiteBox();
     private static void test(Class<?> originalTestClass) throws Exception {
         System.out.println();
         System.out.println("TESTING " + originalTestClass.getName());
@@ -90,7 +100,8 @@ public class LeakTest {
         long deadline = System.currentTimeMillis() + 20*1000;
         Reference<? extends ClassLoader> ref;
         while (wr.get() != null && System.currentTimeMillis() < deadline) {
-            System.gc();
+            // System.gc();
+            WB.fullGC();
             Thread.sleep(100);
         }
         if (wr.get() != null)

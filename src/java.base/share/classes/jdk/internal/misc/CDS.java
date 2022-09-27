@@ -118,16 +118,27 @@ public class CDS {
         }
     }
 
+    /**
+     * log lambda form invoker holder, name and method type
+     */
+    public static void traceLambdaFormCombinator(String prefix, String kind, String type, String name) {
+        if (isDumpingClassList) {
+            logLambdaFormInvoker(prefix + " " + kind + " " + type + " " + name);
+        }
+    }
+
     static final String DIRECT_HOLDER_CLASS_NAME  = "java.lang.invoke.DirectMethodHandle$Holder";
     static final String DELEGATING_HOLDER_CLASS_NAME = "java.lang.invoke.DelegatingMethodHandle$Holder";
     static final String BASIC_FORMS_HOLDER_CLASS_NAME = "java.lang.invoke.LambdaForm$Holder";
     static final String INVOKERS_HOLDER_CLASS_NAME = "java.lang.invoke.Invokers$Holder";
+    static final String COMBINATOR_HOLDER_CLASS_NAME = "java.lang.invoke.LambdaFormEditor$Holder";
 
     private static boolean isValidHolderName(String name) {
         return name.equals(DIRECT_HOLDER_CLASS_NAME)      ||
                name.equals(DELEGATING_HOLDER_CLASS_NAME)  ||
                name.equals(BASIC_FORMS_HOLDER_CLASS_NAME) ||
-               name.equals(INVOKERS_HOLDER_CLASS_NAME);
+               name.equals(INVOKERS_HOLDER_CLASS_NAME) ||
+               name.equals(COMBINATOR_HOLDER_CLASS_NAME);
     }
 
     private static boolean isBasicTypeChar(char c) {
@@ -158,13 +169,14 @@ public class CDS {
 
     // Throw exception on invalid input
     private static void validateInputLines(String[] lines) {
-        for (String s: lines) {
-            if (!s.startsWith("[LF_RESOLVE]") && !s.startsWith("[SPECIES_RESOLVE]")) {
+        Arrays.stream(lines).forEach(s -> {
+            if (!s.startsWith("[LF_RESOLVE]") && !s.startsWith("[SPECIES_RESOLVE]") && !s.startsWith("[LF_COMBINATOR]")) {
                 throw new IllegalArgumentException("Wrong prefix: " + s);
             }
 
             String[] parts = s.split(" ");
             boolean isLF = s.startsWith("[LF_RESOLVE]");
+            boolean isCombinator = s.startsWith("[LF_COMBINATOR]");
 
             if (isLF) {
                 if (parts.length != 4) {
@@ -176,12 +188,19 @@ public class CDS {
                 if (!isValidMethodType(parts[3])) {
                     throw new IllegalArgumentException("Invalid method type: " + parts[3]);
                 }
+            } else if (isCombinator) {
+                if (parts.length != 4) {
+                    throw new IllegalArgumentException("Incorrect number of items in the line: " + parts.length);
+                }
+                if (!isValidMethodType(parts[2])) {
+                    throw new IllegalArgumentException("Invalid method type: " + parts[2]);
+                }
             } else {
                 if (parts.length != 2) {
                    throw new IllegalArgumentException("Incorrect number of items in the line: " + parts.length);
                 }
            }
-      }
+      });
     }
 
     /**
@@ -192,8 +211,7 @@ public class CDS {
     private static Object[] generateLambdaFormHolderClasses(String[] lines) {
         Objects.requireNonNull(lines);
         validateInputLines(lines);
-        Stream<String> lineStream = Arrays.stream(lines);
-        Map<String, byte[]> result = SharedSecrets.getJavaLangInvokeAccess().generateHolderClasses(lineStream);
+        Map<String, byte[]> result = SharedSecrets.getJavaLangInvokeAccess().generateHolderClasses(Arrays.stream(lines));
         int size = result.size();
         Object[] retArray = new Object[size * 2];
         int index = 0;

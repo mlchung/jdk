@@ -4910,7 +4910,7 @@ assert((int)twice.invokeExact(21) == 42);
                     insPos += 1;
                 }
                 Class<?> ptype = newType.parameterType(dropVal);
-                form = form.editor().addArgumentForm(1 + insPos, BasicType.basicType(ptype));
+                form = form.editor().addArgumentForm(1 + insPos, BasicType.basicType(ptype), null);
                 oldType = oldType.insertParameterTypes(insPos, ptype);
                 // expand the reordering by inserting an element at insPos
                 int tailPos = insPos + 1;
@@ -5273,8 +5273,11 @@ assertEquals("yz", (String) d0.invokeExact(123, "x", "y", "z"));
         BoundMethodHandle result = target.rebind();
         LambdaForm lform = result.form;
         int insertFormArg = 1 + pos;
-        for (Class<?> ptype : valueTypes) {
-            lform = lform.editor().addArgumentForm(insertFormArg++, BasicType.basicType(ptype));
+
+        for (int i=0; i < valueTypes.length; i++) {
+            LambdaFormEditor.LambdaFormName lfName = LambdaFormEditor.LambdaFormName.addArgumentFormName(lform.methodType(), pos, valueTypes, i);
+            BasicType bt = BasicType.basicType(valueTypes[i]);
+            lform = lform.editor().addArgumentForm(insertFormArg++, bt, lfName);
         }
         result = result.copyWith(newType, lform);
         return result;

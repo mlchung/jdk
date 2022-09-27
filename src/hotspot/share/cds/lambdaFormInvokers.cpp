@@ -53,11 +53,12 @@ GrowableArrayCHeap<char*, mtClassShared>* LambdaFormInvokers::_lambdaform_lines 
 Array<Array<char>*>*  LambdaFormInvokers::_static_archive_invokers = nullptr;
 GrowableArrayCHeap<OopHandle, mtClassShared>* LambdaFormInvokers::_regenerated_mirrors = nullptr;
 
-#define NUM_FILTER 4
+#define NUM_FILTER 5
 static const char* filter[NUM_FILTER] = {"java.lang.invoke.Invokers$Holder",
                                          "java.lang.invoke.DirectMethodHandle$Holder",
                                          "java.lang.invoke.DelegatingMethodHandle$Holder",
-                                         "java.lang.invoke.LambdaForm$Holder"};
+                                         "java.lang.invoke.LambdaForm$Holder",
+                                         "java.lang.invoke.LambdaFormEditor$Holder"};
 
 static bool should_be_archived(char* line) {
   for (int k = 0; k < NUM_FILTER; k++) {

@@ -127,24 +127,27 @@ public class VerifyStackTrace {
         // then you can cut & paste the <-- actual --> stack printed in the
         // test output in here (don't forget the final \n):
         private final String expected =
-            "1: VerifyStackTrace.lambda$test$1(VerifyStackTrace.java:280)\n" +
-            "2: VerifyStackTrace$$Lambda$1/0x0000000801001848.run(Unknown Source)\n" +
-            "3: VerifyStackTrace$Handle.execute(VerifyStackTrace.java:206)\n" +
+            "1: VerifyStackTrace.lambda$test$1(VerifyStackTrace.java:249)\n" +
+            "2: VerifyStackTrace$$Lambda$1/0x0000000800c017e8.run(Unknown Source)\n" +
+            "3: VerifyStackTrace$Handle.execute(VerifyStackTrace.java:175)\n" +
             "4: java.base/java.lang.invoke.DirectMethodHandle$Holder.invokeVirtual(DirectMethodHandle$Holder)\n" +
-            "5: java.base/java.lang.invoke.LambdaForm$MH/0x0000000801004800.invoke_MT(LambdaForm$MH)\n" +
-            "6: VerifyStackTrace$Handle.run(VerifyStackTrace.java:219)\n" +
-            "7: VerifyStackTrace.invoke(VerifyStackTrace.java:259)\n" +
-            "8: java.base/java.lang.invoke.LambdaForm$DMH/0x0000000801002000.invokeStatic(LambdaForm$DMH)\n" +
-            "9: java.base/java.lang.invoke.LambdaForm$MH/0x0000000801003000.invoke(LambdaForm$MH)\n" +
-            "10: java.base/java.lang.invoke.Invokers$Holder.invokeExact_MT(Invokers$Holder)\n" +
-            "11: java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invokeImpl(DirectMethodHandleAccessor.java:211)\n" +
-            "12: java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:122)\n" +
-            "13: java.base/java.lang.reflect.Method.invoke(Method.java:573)\n" +
-            "14: VerifyStackTrace$1.run(VerifyStackTrace.java:292)\n" +
-            "15: java.base/java.security.AccessController.executePrivileged(AccessController.java:753)\n" +
-            "16: java.base/java.security.AccessController.doPrivileged(AccessController.java:312)\n" +
-            "17: VerifyStackTrace.test(VerifyStackTrace.java:301)\n" +
-            "18: VerifyStackTrace.main(VerifyStackTrace.java:254)\n";
+            "5: java.base/java.lang.invoke.LambdaForm$MH/0x0000000800c04000.invoke_MT(LambdaForm$MH)\n" +
+            "6: VerifyStackTrace$Handle.run(VerifyStackTrace.java:188)\n" +
+            "7: VerifyStackTrace.invoke(VerifyStackTrace.java:228)\n" +
+            "8: java.base/java.lang.invoke.DirectMethodHandle$Holder.invokeStatic(DirectMethodHandle$Holder)\n" +
+            "9: java.base/java.lang.invoke.LambdaForm$MH/0x0000000800c02800.guardWithCatch(LambdaForm$MH)\n" +
+            "10: java.base/java.lang.invoke.LambdaForm$MH/0x0000000800c02c00.dropArguments_0_L(LambdaForm$MH)\n" +
+            "11: java.base/java.lang.invoke.LambdaForm$MH/0x0000000800c03000.filterArgument_2_L(LambdaForm$MH)\n" +
+            "12: java.base/java.lang.invoke.LambdaForm$MH/0x0000000800c03400.spreadArguments_2_L_1(LambdaForm$MH)\n" +
+            "13: java.base/java.lang.invoke.LambdaForm$MH/0x0000000800c03800.filterReturnToZero_V_L(LambdaForm$MH)\n" +
+            "14: java.base/java.lang.invoke.Invokers$Holder.invokeExact_MT(Invokers$Holder)\n" +
+            "15: java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)\n" +
+            "16: java.base/java.lang.reflect.Method.invoke(Method.java:577)\n" +
+            "17: VerifyStackTrace$1.run(VerifyStackTrace.java:261)\n" +
+            "18: java.base/java.security.AccessController.executePrivileged(AccessController.java:776)\n" +
+            "19: java.base/java.security.AccessController.doPrivileged(AccessController.java:318)\n" +
+            "20: VerifyStackTrace.test(VerifyStackTrace.java:270)\n" +
+            "21: VerifyStackTrace.main(VerifyStackTrace.java:223)\n";
 
         @Override public StackWalker walker() { return walker;}
         @Override public String description() { return description;}
@@ -203,6 +206,11 @@ public class VerifyStackTrace {
             return produced.replaceAll(":[1-9][0-9]*\\)", ":00)")
                     .replaceAll("/0x[0-9a-f]+\\.run", "/xxxxxxxx.run")
                     .replaceAll("/0x[0-9a-f]+\\.invoke", "/xxxxxxxx.invoke")
+                    .replaceAll("/0x[0-9a-f]+\\.guardWithCatch", "/xxxxxxxx.guardWithCatch")
+                    .replaceAll("/0x[0-9a-f]+\\.dropArguments", "/xxxxxxxx.dropArguments")
+                    .replaceAll("/0x[0-9a-f]+\\.filterArgument", "/xxxxxxxx.filterArgument")
+                    .replaceAll("/0x[0-9a-f]+\\.filterReturnToZero", "/xxxxxxxx.filterReturnToZero")
+                    .replaceAll("/0x[0-9a-f]+\\.spreadArguments", "/xxxxxxxx.spreadArguments")
                     // LFs may or may not be pre-generated, making frames differ
                     .replaceAll("DirectMethodHandle\\$Holder", "LambdaForm\\$DMH")
                     .replaceAll("Invokers\\$Holder", "LambdaForm\\$MH")

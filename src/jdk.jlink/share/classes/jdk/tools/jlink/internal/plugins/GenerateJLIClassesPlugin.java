@@ -131,7 +131,8 @@ public final class GenerateJLIClassesPlugin extends AbstractPlugin {
                 if (path.equals(DIRECT_METHOD_HOLDER_ENTRY) ||
                     path.equals(DELEGATING_METHOD_HOLDER_ENTRY) ||
                     path.equals(INVOKERS_HOLDER_ENTRY) ||
-                    path.equals(BASIC_FORMS_HOLDER_ENTRY)) {
+                    path.equals(BASIC_FORMS_HOLDER_ENTRY) ||
+                    path.equals(COMBINATOR_FORMS_HOLDER_ENTRY)) {
                     return null;
                 } else {
                     return entry;
@@ -162,4 +163,6 @@ public final class GenerateJLIClassesPlugin extends AbstractPlugin {
             "/java.base/java/lang/invoke/LambdaForm$Holder.class";
     private static final String INVOKERS_HOLDER_ENTRY =
             "/java.base/java/lang/invoke/Invokers$Holder.class";
+    private static final String COMBINATOR_FORMS_HOLDER_ENTRY =
+            "/java.base/java/lang/invoke/LambdaFormEditor$Holder.class";
 }

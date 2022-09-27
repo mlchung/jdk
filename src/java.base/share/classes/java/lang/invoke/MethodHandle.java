@@ -914,6 +914,14 @@ public abstract sealed class MethodHandle implements Constable
         return keepsAlive(newType, loader);
     }
 
+    /*non-public*/
+    void clearSoftAsTypeCache() {
+        SoftReference<MethodHandle> softCache = asTypeSoftCache;
+        if (softCache != null) {
+            asTypeSoftCache = null;
+        }
+    }
+
     /**
      * Tries to find the most specific {@code ClassLoader} which keeps all the classes mentioned in {@code mt} alive.
      * In the worst case, returns a {@code ClassLoader} which relates to some of the classes mentioned in {@code mt}.

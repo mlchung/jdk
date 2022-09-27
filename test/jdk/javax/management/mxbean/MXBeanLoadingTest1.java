@@ -29,9 +29,14 @@
  * @author Olivier Lagneau
  *
  * @library /lib/testlibrary
- *
- * @run main/othervm/timeout=300 MXBeanLoadingTest1
+ * @library /test/lib
+ * @build jdk.test.whitebox.WhiteBox
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
+ * @run main/othervm/timeout=300
+ *    -Xbootclasspath/a:.
+ *    -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI MXBeanLoadingTest1
  */
+import jdk.test.whitebox.WhiteBox;
 
 import java.lang.ref.WeakReference;
 import java.net.URL;
@@ -54,6 +59,7 @@ import javax.management.openmbean.OpenType;
 import javax.management.openmbean.SimpleType;
 
 public class MXBeanLoadingTest1 {
+    private static final WhiteBox WB = WhiteBox.getWhiteBox();
 
     public static void main(String[] args) throws Exception {
         MXBeanLoadingTest1 test = new MXBeanLoadingTest1();
@@ -273,6 +279,7 @@ public class MXBeanLoadingTest1 {
             System.out.println("MXBean registered and unregistered, waiting for " +
                     "garbage collector to collect class loader");
 
+            WB.fullGC();
             for (int i = 0; i < 10000 && mletRef.get() != null; i++) {
                 System.gc();
                 Thread.sleep(1);

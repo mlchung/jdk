@@ -862,7 +862,7 @@ abstract class MethodHandleImpl {
      * Having t8 and t10 passed outside and not hardcoded into a lambda form allows to share lambda forms
      * among catchException combinators with the same basic type.
      */
-    private static LambdaForm makeGuardWithCatchForm(MethodType basicType) {
+     static LambdaForm makeGuardWithCatchForm(MethodType basicType) {
         MethodType lambdaType = basicType.invokerType();
 
         LambdaForm lform = basicType.form().cachedLambdaForm(MethodTypeForm.LF_GWC);
@@ -912,8 +912,8 @@ abstract class MethodHandleImpl {
         Object[] unboxArgs  = new Object[] {names[GET_UNBOX_RESULT], names[TRY_CATCH]};
         names[UNBOX_RESULT] = new Name(invokeBasicUnbox, unboxArgs);
 
-        lform = new LambdaForm(lambdaType.parameterCount(), names, Kind.GUARD_WITH_CATCH);
-
+        String lambdaName = LambdaFormEditor.LambdaFormName.guardWithCatchFormName(lambdaType).name();
+        lform = new LambdaForm(lambdaType.parameterCount(), names, Kind.GUARD_WITH_CATCH, lambdaName);
         return basicType.form().setCachedLambdaForm(MethodTypeForm.LF_GWC, lform);
     }
 
@@ -1654,10 +1654,8 @@ abstract class MethodHandleImpl {
                 return BindCaller.reflectiveInvoker(caller);
             }
 
-            @Override
-            public Lookup defineHiddenClassWithClassData(Lookup caller, String name, byte[] bytes, Object classData, boolean initialize) {
-                // skip name and access flags validation
-                return caller.makeHiddenClassDefiner(name, bytes, Set.of()).defineClassAsLookup(initialize, classData);
+            public void clearSoftAsTypeCache(MethodHandle mh) {
+                mh.clearSoftAsTypeCache();
             }
 
             @Override
@@ -2074,7 +2072,7 @@ abstract class MethodHandleImpl {
         return mh;
     }
 
-    private static LambdaForm makeCollectorForm(MethodType basicType, Class<?> arrayType) {
+    static LambdaForm makeCollectorForm(MethodType basicType, Class<?> arrayType) {
         MethodType lambdaType = basicType.invokerType();
         int parameterCount = basicType.parameterCount();
 
@@ -2126,7 +2124,9 @@ abstract class MethodHandleImpl {
                     names[CALL_NEW_ARRAY], storeIndex, names[argCursor]);
         }
 
-        LambdaForm lform = new LambdaForm(lambdaType.parameterCount(), names, CALL_NEW_ARRAY, Kind.COLLECTOR);
+        String lambdaName = LambdaFormEditor.LambdaFormName.collectorFormName(lambdaType, arrayType).name();
+        LambdaForm lform = new LambdaForm(lambdaType.parameterCount(), names, CALL_NEW_ARRAY, Kind.COLLECTOR, lambdaName);
+
         if (isSharedLambdaForm) {
             lform = basicType.form().setCachedLambdaForm(MethodTypeForm.LF_COLLECTOR, lform);
         }

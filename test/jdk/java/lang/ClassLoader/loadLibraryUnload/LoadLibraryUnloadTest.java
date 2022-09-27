@@ -34,7 +34,11 @@
  *          when the native library is loaded from a custom class loader.
  * @library /test/lib
  * @build LoadLibraryUnload p.Class1
- * @run main/othervm/native LoadLibraryUnloadTest
+ * @build jdk.test.whitebox.WhiteBox
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
+ * @run main/othervm/native -Xcheck:jni
+ *    -Xbootclasspath/a:.
+ *    -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI LoadLibraryUnloadTest
  */
 
 import jdk.test.lib.Asserts;

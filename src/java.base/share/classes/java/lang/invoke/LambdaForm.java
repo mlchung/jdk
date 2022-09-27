@@ -130,6 +130,7 @@ class LambdaForm {
     final Kind kind;
     MemberName vmentry;   // low-level behavior, or null if not yet prepared
     private boolean isCompiled;
+    final String lambdaName;  // LF name to resolve from the pregenerated LF classes
 
     // Either a LambdaForm cache (managed by LambdaFormEditor) or a link to uncustomized version (for customized LF)
     volatile Object transformCache;
@@ -315,7 +316,20 @@ class LambdaForm {
         GUARD_WITH_CATCH("guardWithCatch"),
         VARHANDLE_EXACT_INVOKER("VH.exactInvoker"),
         VARHANDLE_INVOKER("VH.invoker", "invoker"),
-        VARHANDLE_LINKER("VH.invoke_MT", "invoke_MT");
+        VARHANDLE_LINKER("VH.invoke_MT", "invoke_MT"),
+        ADD_ARG("dropArguments"),
+        BIND_ARG("bindArgument"),
+        FILTER_RETURN("filterReturn"),
+        FILTER_RETURN_TO_ZERO("filterReturnToZero"),
+        SPREAD_ARGS("spreadArguments"),
+        FILTER_ARG("filterArgument"),
+        FOLD_ARGS("foldArguments"),
+        FOLD_ARGS_TO_VOID("foldArgumentsToVoid"),
+        FOLD_SELECT_ARGS("foldSelectArguments"),
+        FOLD_SELECT_ARGS_TO_VOID("foldSelectArgumentsToVoid"),
+        COLLECT_ARGS("collectArguments"),
+        COLLECT_ARGS_TO_VOID("collectArgumentsToVoid"),
+        FILTER_SELECT_ARGS("filterSelectArguments");
 
         final String defaultLambdaName;
         final String methodName;
@@ -331,15 +345,18 @@ class LambdaForm {
     }
 
     LambdaForm(int arity, Name[] names, int result) {
-        this(arity, names, result, /*forceInline=*/true, /*customized=*/null, Kind.GENERIC);
+        this(arity, names, result, /*forceInline=*/true, /*customized=*/null, Kind.GENERIC, null);
+    }
+    LambdaForm(int arity, Name[] names, int result, Kind kind, String lambdaName) {
+        this(arity, names, result, /*forceInline=*/true, /*customized=*/null, kind, lambdaName);
     }
     LambdaForm(int arity, Name[] names, int result, Kind kind) {
-        this(arity, names, result, /*forceInline=*/true, /*customized=*/null, kind);
+        this(arity, names, result, /*forceInline=*/true, /*customized=*/null, kind, null);
     }
     LambdaForm(int arity, Name[] names, int result, boolean forceInline, MethodHandle customized) {
-        this(arity, names, result, forceInline, customized, Kind.GENERIC);
+        this(arity, names, result, forceInline, customized, Kind.GENERIC, null);
     }
-    LambdaForm(int arity, Name[] names, int result, boolean forceInline, MethodHandle customized, Kind kind) {
+    LambdaForm(int arity, Name[] names, int result, boolean forceInline, MethodHandle customized, Kind kind, String lambdaName) {
         assert(namesOK(arity, names));
         this.arity = arity;
         this.result = fixResult(result, names);
@@ -347,6 +364,7 @@ class LambdaForm {
         this.forceInline = forceInline;
         this.customized = customized;
         this.kind = kind;
+        this.lambdaName = (lambdaName != null ? lambdaName : lambdaName());
         int maxOutArity = normalize();
         if (maxOutArity > MethodType.MAX_MH_INVOKER_ARITY) {
             // Cannot use LF interpreter on very high arity expressions.
@@ -355,13 +373,17 @@ class LambdaForm {
         }
     }
     LambdaForm(int arity, Name[] names) {
-        this(arity, names, LAST_RESULT, /*forceInline=*/true, /*customized=*/null, Kind.GENERIC);
+        this(arity, names, LAST_RESULT, /*forceInline=*/true, /*customized=*/null, Kind.GENERIC, null);
+
     }
     LambdaForm(int arity, Name[] names, Kind kind) {
-        this(arity, names, LAST_RESULT, /*forceInline=*/true, /*customized=*/null, kind);
+        this(arity, names, LAST_RESULT, /*forceInline=*/true, /*customized=*/null, kind, null);
+    }
+    LambdaForm(int arity, Name[] names, Kind kind, String lambdaName) {
+        this(arity, names, LAST_RESULT, /*forceInline=*/true, /*customized=*/null, kind, lambdaName);
     }
     LambdaForm(int arity, Name[] names, boolean forceInline, Kind kind) {
-        this(arity, names, LAST_RESULT, forceInline, /*customized=*/null, kind);
+        this(arity, names, LAST_RESULT, forceInline, /*customized=*/null, kind, null);
     }
 
     private static Name[] buildNames(Name[] formals, Name[] temps, Name result) {
@@ -384,13 +406,13 @@ class LambdaForm {
         this.forceInline = true;
         this.customized = null;
         this.kind = Kind.ZERO;
+        this.lambdaName = lambdaName();
         assert(nameRefsAreLegal());
         assert(isEmpty());
         String sig = null;
         assert(isValidSignature(sig = basicTypeSignature()));
         assert(sig.equals(basicTypeSignature())) : sig + " != " + basicTypeSignature();
     }
-
     private static Name[] buildEmptyNames(int arity, MethodType mt, boolean isVoid) {
         Name[] names = arguments(isVoid ? 0 : 1, mt);
         if (!isVoid) {
@@ -467,7 +489,7 @@ class LambdaForm {
         if (customized == mh) {
             return this;
         }
-        LambdaForm customForm = new LambdaForm(arity, names, result, forceInline, mh, kind);
+        LambdaForm customForm = new LambdaForm(arity, names, result, forceInline, mh, kind, lambdaName);
         if (COMPILE_THRESHOLD >= 0 && isCompiled) {
             // If shared LambdaForm has been compiled, compile customized version as well.
             customForm.compileToBytecode();
@@ -1029,7 +1051,6 @@ class LambdaForm {
     }
 
     public String toString() {
-        String lambdaName = lambdaName();
         StringBuilder buf = new StringBuilder(lambdaName + "=Lambda(");
         for (int i = 0; i < names.length; i++) {
             if (i == arity)  buf.append(")=>{");

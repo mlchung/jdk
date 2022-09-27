@@ -29,7 +29,6 @@ import jdk.internal.access.JavaLangInvokeAccess;
 import jdk.internal.access.SharedSecrets;
 import jdk.internal.misc.VM;
 import jdk.internal.vm.annotation.ForceInline;
-import jdk.internal.vm.annotation.Hidden;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -39,7 +38,6 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
 import static java.lang.invoke.MethodType.genericMethodType;
-import static jdk.internal.reflect.MethodHandleAccessorFactory.SPECIALIZED_PARAM_COUNT;
 import static jdk.internal.reflect.MethodHandleAccessorFactory.LazyStaticHolder.JLIA;
 
 class DirectMethodHandleAccessor extends MethodAccessorImpl {
@@ -101,20 +99,13 @@ class DirectMethodHandleAccessor extends MethodAccessorImpl {
         }
         checkArgumentCount(paramCount, args);
         try {
-            return invokeImpl(obj, args);
+            return target.invokeExact(obj, args);
         } catch (ClassCastException | WrongMethodTypeException e) {
-            if (isIllegalArgument(e)) {
-                // No cause in IAE to be consistent with the old behavior
-                throw new IllegalArgumentException("argument type mismatch");
-            } else {
-                throw new InvocationTargetException(e);
-            }
+            throw new IllegalArgumentException("argument type mismatch", e);
         } catch (NullPointerException e) {
-            if (isIllegalArgument(e)) {
-                throw new IllegalArgumentException(e);
-            } else {
-                throw new InvocationTargetException(e);
-            }
+            throw new IllegalArgumentException(e);
+        } catch (InvocationTargetException e) {
+            throw e;
         } catch (Throwable e) {
             throw new InvocationTargetException(e);
         }
@@ -128,59 +119,24 @@ class DirectMethodHandleAccessor extends MethodAccessorImpl {
         }
         checkArgumentCount(paramCount, args);
         try {
-            return invokeImpl(obj, args, caller);
-        } catch (ClassCastException | WrongMethodTypeException e) {
-            if (isIllegalArgument(e)) {
-                // No cause in IAE to be consistent with the old behavior
-                throw new IllegalArgumentException("argument type mismatch");
+            if (hasCallerParameter()) {
+                // caller-sensitive method is invoked through method with caller parameter
+                return target.invokeExact(obj, args, caller);
             } else {
-                throw new InvocationTargetException(e);
-            }
-        } catch (NullPointerException e) {
-            if (isIllegalArgument(e)) {
-                throw new IllegalArgumentException(e);
-            } else {
-                throw new InvocationTargetException(e);
-            }
-        } catch (Throwable e) {
-            throw new InvocationTargetException(e);
-        }
-    }
-
-    @Hidden
-    @ForceInline
-    private Object invokeImpl(Object obj, Object[] args) throws Throwable {
-        return switch (paramCount) {
-            case 0 -> target.invokeExact(obj);
-            case 1 -> target.invokeExact(obj, args[0]);
-            case 2 -> target.invokeExact(obj, args[0], args[1]);
-            case 3 -> target.invokeExact(obj, args[0], args[1], args[2]);
-            default -> target.invokeExact(obj, args);
-        };
-    }
-
-    @Hidden
-    @ForceInline
-    private Object invokeImpl(Object obj, Object[] args, Class<?> caller) throws Throwable {
-        if (hasCallerParameter()) {
-            // caller-sensitive method is invoked through method with caller parameter
-            return switch (paramCount) {
-                case 0 -> target.invokeExact(obj, caller);
-                case 1 -> target.invokeExact(obj, args[0], caller);
-                case 2 -> target.invokeExact(obj, args[0], args[1], caller);
-                case 3 -> target.invokeExact(obj, args[0], args[1], args[2], caller);
-                default -> target.invokeExact(obj, args, caller);
-            };
-        } else {
-            // caller-sensitive method is invoked through a per-caller invoker while
-            // the target MH is always spreading the args
-            var invoker = JLIA.reflectiveInvoker(caller);
-            try {
+                // caller-sensitive method is invoked through a per-caller invoker while
+                // the target MH is always spreading the args
+                var invoker = JLIA.reflectiveInvoker(caller);
                 // invoke the target method handle via an invoker
                 return invoker.invokeExact(target, obj, args);
-            } catch (IllegalArgumentException e) {
-                throw new InvocationTargetException(e);
             }
+        } catch (ClassCastException | WrongMethodTypeException e) {
+            throw new IllegalArgumentException("argument type mismatch", e);
+        } catch (NullPointerException e) {
+            throw new IllegalArgumentException(e);
+        } catch (InvocationTargetException e) {
+            throw e;
+        } catch (Throwable e) {
+            throw new InvocationTargetException(e);
         }
     }
 
@@ -248,7 +204,7 @@ class DirectMethodHandleAccessor extends MethodAccessorImpl {
                 } catch (InvocationTargetException|RuntimeException|Error e) {
                     throw e;
                 } catch (Throwable e) {
-                    throw new InternalError(e);
+                    throw new InvocationTargetException(e);
                 }
             }
         }
@@ -329,9 +285,6 @@ class DirectMethodHandleAccessor extends MethodAccessorImpl {
     }
 
     private static void checkArgumentCount(int paramCount, Object[] args) {
-        // only check argument count for specialized forms
-        if (paramCount > SPECIALIZED_PARAM_COUNT) return;
-
         int argc = args != null ? args.length : 0;
         if (argc != paramCount) {
             throw new IllegalArgumentException("wrong number of arguments: " + argc + " expected: " + paramCount);

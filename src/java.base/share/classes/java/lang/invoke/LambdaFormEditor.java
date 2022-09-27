@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,16 +29,15 @@ import sun.invoke.util.Wrapper;
 
 import java.lang.ref.SoftReference;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static java.lang.invoke.LambdaForm.*;
 import static java.lang.invoke.LambdaForm.BasicType.*;
-import static java.lang.invoke.MethodHandleImpl.Intrinsic;
-import static java.lang.invoke.MethodHandleImpl.NF_loop;
-import static java.lang.invoke.MethodHandleImpl.makeIntrinsic;
+import static java.lang.invoke.MethodHandleImpl.*;
+import static java.lang.invoke.MethodHandleStatics.UNSAFE;
+import static java.lang.invoke.MethodHandleStatics.traceLambdaFormCombinator;
 
 /** Transforms on LFs.
  *  A lambda-form editor can derive new LFs from its base LF.
@@ -404,6 +403,253 @@ class LambdaFormEditor {
         return (k != null) ? k.get() : null;
     }
 
+    static record LambdaFormName(Kind kind, MethodType methodType, String name) {
+        static class Builder {
+            final StringBuilder sb;
+            final Kind kind;
+            final MethodType methodType;
+            Builder(Kind kind, MethodType methodType) {
+                this.sb = new StringBuilder(kind.methodName);
+                this.kind = kind;
+                this.methodType = methodType;
+            }
+            Builder append(int value) {
+                sb.append('_').append(value);
+                return this;
+            }
+
+            Builder append(BasicType bt) {
+                sb.append('_').append(bt.btChar);
+                return this;
+            }
+
+            Builder append(Class<?>... types) {
+                sb.append('_');
+                for (Class<?> t : types) {
+                    sb.append(BasicType.basicTypeChar(t));
+                }
+                return this;
+            }
+
+            Builder append(MethodType type) {
+                sb.append('_').append(basicTypeSignature(type));
+                return this;
+            }
+
+            Builder append(BoundMethodHandle.SpeciesData speciesData) {
+                sb.append('_').append(speciesData.key());
+                return this;
+            }
+
+            String name() {
+                traceLambdaFormCombinator(kind, methodType, sb.toString());
+                return sb.toString();
+            }
+        }
+
+        static LambdaFormName addArgumentFormName(MethodType mtype, int pos, Class<?>[] valueTypes, int index) {
+            Builder builder = new Builder(Kind.ADD_ARG, mtype);
+            if (index < 0 || index >= valueTypes.length) {
+                throw new IndexOutOfBoundsException(index + " out of bound: " + valueTypes.length);
+            }
+            // <methodname>_<pos>_<t0>[_<t1]_...<tn>]
+            builder.append(pos);
+            for (int i=0; i <= index; i++) {
+                BasicType bt = BasicType.basicType(valueTypes[i]);
+                builder.append(bt);
+            }
+            return new LambdaFormName(Kind.ADD_ARG, mtype, builder.name());
+        }
+
+        LambdaForm makeAddArgumentForm(LambdaForm lform) {
+            // <methodname>_<pos>_<t0>[_<t1]_...<tn>]
+            int index = name.indexOf('_');
+            int start = index + 1;   // index of <pos>
+            int end = name.indexOf('_', start);
+            int pos = Integer.valueOf(name.substring(start, end));
+            // System.out.println(name + " at " + index + " = " + pos + " type " + methodType);
+            int insertFormArg = 1 + pos;
+            index = end + 1;
+            for (; index < name.length(); index += 2) {
+                LambdaForm.BasicType bt = LambdaForm.BasicType.basicType(name.charAt(index));
+                LambdaFormName lfName = new LambdaFormName(kind, methodType, name.substring(0, index + 1));
+                lform = lform.editor().addArgumentForm(insertFormArg++, bt, lfName);
+            }
+            return lform;
+        }
+
+        static LambdaFormName bindArgumentFormName(MethodType mtype, int pos, BoundMethodHandle.SpeciesData oldSpecies, BasicType bt) {
+            Builder builder = new Builder(Kind.BIND_ARG, mtype);
+            // <methodname>_<pos>_<oldspecies>_<type>
+            builder.append(pos).append(oldSpecies).append(bt);
+            return new LambdaFormName(Kind.BIND_ARG, mtype, builder.name());
+        }
+
+        LambdaForm makeBindArgumentForm(LambdaForm lform) {
+            // <methodname>_<pos>_<oldspecies>_<type>
+            int index = name.indexOf('_');
+            int start = index + 1;   // index of <pos>
+            int end = name.indexOf('_', start);
+            int pos = Integer.valueOf(name.substring(start, end));
+            start = end+1;          // index of <oldspecies>
+            end = name.indexOf('_', start);
+            String species = name.substring(start, end);
+            index = end+1;  // index of <type>
+            assert name.length() == index+1;
+            LambdaForm.BasicType bt = LambdaForm.BasicType.basicType(name.charAt(index));
+
+            // skip if the species is other than 'L'
+            if (!species.equals("L")) {
+                // System.out.println("FILTERED: " + name + " species " + species + " bt " + bt + " type " + methodType);
+                return null;
+            }
+
+            // System.out.println(name + " species " + species + " bt " + bt + " type " + methodType);
+            return lform.editor().bindArgumentForm(pos);
+        }
+
+        static LambdaFormName filterReturnFormName(MethodType mtype, BasicType newType, BoundMethodHandle.SpeciesData newSpecies, BasicType returnType) {
+            Builder builder = new Builder(Kind.FILTER_RETURN, mtype);
+            // <methodname>_<newspecies>_<oldType>_<newType>
+            builder.append(newSpecies);
+            builder.append(returnType).append(newType);
+            return new LambdaFormName(Kind.FILTER_RETURN, mtype, builder.name());
+        }
+        LambdaForm makeFilterReturnForm(LambdaForm lform) {
+            // <methodname>_<newspecies>_<oldType>_<newType>
+            int index = name.indexOf('_');
+            int start = index + 1;      // index of <newspecies>
+            int end = name.indexOf('_', start);
+            String species = name.substring(start, end);
+            index = end + 1;           // index of <oldType>
+            LambdaForm.BasicType oldType = basicType(name.charAt(index));
+            index = index + 2;         // index of <newType>
+            assert index == name.length()-1;
+            LambdaForm.BasicType newType = basicType(name.charAt(index));
+
+            // skip if the species is other than 'LL'
+            if (!species.equals("LL")) {
+                // System.out.println("FILTERED: " + name + " type " + methodType + " new species " + species);
+                return null;
+            }
+
+            // System.out.println(name + " type " + methodType + " new species " + species);
+            return lform.editor().filterReturnForm(newType, false);
+        }
+
+        static LambdaFormName filterReturnToZeroFormName(MethodType mtype, BasicType newType, BasicType returnType) {
+            Builder builder = new Builder(Kind.FILTER_RETURN_TO_ZERO, mtype);
+            // <methodname>_<oldType>_<newType>
+            builder.append(returnType).append(newType);
+            return new LambdaFormName(Kind.FILTER_RETURN_TO_ZERO, mtype, builder.name());
+        }
+
+        LambdaForm makeFilterReturnToZeroForm(LambdaForm lform) {
+            // <methodname>_<oldType>_<newType>
+            int index = name.indexOf('_') + 1;   // index of <oldType>
+            LambdaForm.BasicType oldType = basicType(name.charAt(index));
+            index += 2;                          // index of <newType>
+            assert index == name.length()-1;
+            LambdaForm.BasicType newType = basicType(name.charAt(index));
+
+            // System.out.println(name + " type " + methodType + " new type " + newType);
+            return lform.editor().filterReturnForm(newType, true);
+        }
+
+        static LambdaFormName spreadArgumentsFormName(MethodType mtype, int pos, Class<?> arrayType, int arrayLength) {
+            Builder builder = new Builder(Kind.SPREAD_ARGS, mtype);
+            Class<?> elementType = arrayType.getComponentType();
+            BasicType bt = basicType(elementType);
+            // <methodname>_<pos>_<elementType>_<arrayLength>
+            builder.append(pos).append(bt).append(arrayLength);
+            return new LambdaFormName(Kind.SPREAD_ARGS, mtype, builder.name());
+        }
+
+        LambdaForm makeSpreadArgumentsForm(LambdaForm lform) {
+            // <methodname>_<pos>_<elementType>_<arrayLength>
+            int index = name.indexOf('_');
+            int start = index + 1;   // index of <pos>
+            int end = name.indexOf('_', start);
+            int pos = Integer.valueOf(name.substring(start, end));
+            index = end+1;     // index of <element type>
+            Class<?> elementType = basicType(name.charAt(index)).basicTypeClass();
+            index += 2;        // index of <array length>
+            int arrayLength = Integer.valueOf(name.substring(index));
+            // System.out.println(name + " pos " + pos + "element type " + elementType.getName() + " array length " + arrayLength);
+            return lform.editor().spreadArgumentsForm(pos, elementType.arrayType(), arrayLength);
+        }
+
+        static LambdaFormName collectorFormName(MethodType mtype, Class<?> arrayType) {
+            Builder builder = new Builder(Kind.COLLECTOR, mtype);
+            // <methodname>_<componentType>
+            builder.append(arrayType.componentType());
+            return new LambdaFormName(Kind.BIND_ARG, mtype, builder.name());
+        }
+
+        LambdaForm makeCollectorForm() {
+            assert kind == Kind.COLLECTOR;
+            // <methodname>_<componentType>
+            int index = name.indexOf('_') + 1;  // index of <componentType>
+            assert index+1 == name.length();
+            Class<?> componentType = basicType(name.charAt(index)).basicTypeClass();
+            // System.out.println(name + " type " + methodType + " component type " + componentType.getName());
+            return MethodHandleImpl.makeCollectorForm(methodType, componentType.arrayType());
+        }
+        static LambdaFormName guardWithCatchFormName(MethodType mtype) {
+            Builder builder = new Builder(Kind.GUARD_WITH_CATCH, mtype);
+            // <methodname>
+            return new LambdaFormName(Kind.GUARD_WITH_CATCH, mtype, builder.name());
+        }
+
+        LambdaForm makeGuardWithCatchForm() {
+            return MethodHandleImpl.makeGuardWithCatchForm(methodType);
+        }
+
+        static LambdaFormName collectArgumentsFormName(MethodType mtype, int pos, MethodType collectorType) {
+            boolean dropResult = (collectorType.returnType() == void.class);
+            Kind lfKind = (dropResult ? Kind.COLLECT_ARGS_TO_VOID : Kind.COLLECT_ARGS);
+
+            Builder builder = new Builder(lfKind, mtype);
+            // <methodname>_<pos>_<paramType0>...<paramTypeN>]
+            builder.append(pos).append(collectorType.ptypes());
+            return new LambdaFormName(lfKind, mtype, builder.name());
+        }
+
+        static LambdaFormName filterArgumentsFormName(MethodType mtype, int filterPos, BasicType newType) {
+            Builder builder = new Builder(Kind.FILTER_ARG, mtype);
+            // <methodname>_<filterPos>_<newType>
+            builder.append(filterPos).append(newType);
+            return new LambdaFormName(Kind.FILTER_ARG, mtype, builder.name());
+        }
+        static LambdaFormName filterSelectArguments(MethodType mtype, int filterPos, MethodType combinerType, int ... argPositions) {
+            Builder builder = new Builder(Kind.FILTER_SELECT_ARGS, mtype);
+            // <methodname>_<filterPos>_<combinerType>_<argPos0>..._<argPosN>
+            builder.append(filterPos).append(combinerType);
+            for (int argPos : argPositions) {
+                builder.append(argPos);
+            }
+            return new LambdaFormName(Kind.FILTER_SELECT_ARGS, mtype, builder.name());
+        }
+        static LambdaFormName foldArgumentsFormName(MethodType mtype, int foldPos, boolean dropResult, MethodType combinerType) {
+            Kind lfKind = (dropResult ? Kind.FOLD_ARGS_TO_VOID : Kind.FOLD_ARGS);
+            int combinerArity = combinerType.parameterCount();
+            Builder builder = new Builder(lfKind, mtype);
+            // <methodname>_<foldPos>_<combinerType>_<combinerArity>
+            builder.append(foldPos).append(combinerType).append(combinerArity);
+            return new LambdaFormName(lfKind, mtype, builder.name());
+        }
+        static LambdaFormName foldSelectArgumentsFormName(MethodType mtype, int foldPos, boolean dropResult, MethodType combinerType, int ... argPositions) {
+            Kind lfKind = (dropResult ? Kind.FOLD_SELECT_ARGS_TO_VOID : Kind.FOLD_SELECT_ARGS);
+            Builder builder = new Builder(lfKind, mtype);
+            // <methodname>_<foldPos>_<combinerType>_<argPos0>..._<argPosN>
+            builder.append(foldPos).append(combinerType);
+            for (int argPos : argPositions) {
+                builder.append(argPos);
+            }
+            return new LambdaFormName(lfKind, mtype, builder.name());
+        }
+    }
+
     /** Arbitrary but reasonable limits on Transform[] size for cache. */
     private static final int MIN_CACHE_ARRAY_SIZE = 4, MAX_CACHE_ARRAY_SIZE = 16;
 
@@ -507,6 +753,10 @@ class LambdaFormEditor {
         return new LambdaFormBuffer(lambdaForm);
     }
 
+    private LambdaFormBuffer buffer(LambdaFormName lfName) {
+        return new LambdaFormBuffer(lambdaForm, lfName.kind(), lfName.name());
+    }
+
     /// Editing methods for method handles.  These need to have fast paths.
 
     private BoundMethodHandle.SpeciesData oldSpeciesData() {
@@ -573,7 +823,8 @@ class LambdaFormEditor {
             assert(form.parameterConstraint(0) == newSpeciesData(lambdaForm.parameterType(pos)));
             return form;
         }
-        LambdaFormBuffer buf = buffer();
+        LambdaFormName lfName = LambdaFormName.bindArgumentFormName(lambdaForm.methodType(), pos, oldSpeciesData(), lambdaForm.parameterType(pos));
+        LambdaFormBuffer buf = buffer(lfName);
         buf.startEdit();
 
         BoundMethodHandle.SpeciesData oldData = oldSpeciesData();
@@ -601,7 +852,7 @@ class LambdaFormEditor {
         return putInCache(key, form);
     }
 
-    LambdaForm addArgumentForm(int pos, BasicType type) {
+    LambdaForm addArgumentForm(int pos, BasicType type, LambdaFormName lfName) {
         TransformKey key = TransformKey.of(ADD_ARG, pos, type.ordinal());
         LambdaForm form = getInCache(key);
         if (form != null) {
@@ -609,7 +860,7 @@ class LambdaFormEditor {
             assert(form.parameterType(pos) == type);
             return form;
         }
-        LambdaFormBuffer buf = buffer();
+        LambdaFormBuffer buf = lfName != null ? buffer(lfName) : buffer();
         buf.startEdit();
 
         buf.insertParameter(pos, new Name(type));
@@ -654,7 +905,8 @@ class LambdaFormEditor {
             assert(form.arity == lambdaForm.arity - arrayLength + 1);
             return form;
         }
-        LambdaFormBuffer buf = buffer();
+        LambdaFormName lfName = LambdaFormName.spreadArgumentsFormName(lambdaForm.methodType(), pos, arrayType, arrayLength);
+        LambdaFormBuffer buf = buffer(lfName);
         buf.startEdit();
 
         assert(pos <= MethodType.MAX_JVM_ARITY);
@@ -696,7 +948,8 @@ class LambdaFormEditor {
             assert(form.arity == lambdaForm.arity - (dropResult ? 0 : 1) + collectorArity);
             return form;
         }
-        form = makeArgumentCombinationForm(pos, collectorType, false, dropResult);
+        LambdaFormName lfName = LambdaFormName.collectArgumentsFormName(lambdaForm.methodType(), pos, collectorType);
+        form = makeArgumentCombinationForm(pos, collectorType, false, dropResult, lfName);
         return putInCache(key, form);
     }
 
@@ -712,7 +965,8 @@ class LambdaFormEditor {
         BasicType oldType = lambdaForm.parameterType(pos);
         MethodType filterType = MethodType.methodType(oldType.basicTypeClass(),
                 newType.basicTypeClass());
-        form = makeArgumentCombinationForm(pos, filterType, false, false);
+        LambdaFormName lfName = LambdaFormName.filterArgumentsFormName(lambdaForm.methodType(), pos, newType);
+        form = makeArgumentCombinationForm(pos, filterType, false, false, lfName);
         return putInCache(key, form);
     }
 
@@ -810,8 +1064,10 @@ class LambdaFormEditor {
 
     private LambdaForm makeArgumentCombinationForm(int pos,
                                                    MethodType combinerType,
-                                                   boolean keepArguments, boolean dropResult) {
-        LambdaFormBuffer buf = buffer();
+                                                   boolean keepArguments,
+                                                   boolean dropResult,
+                                                   LambdaFormName lfName) {
+        LambdaFormBuffer buf = buffer(lfName);
         buf.startEdit();
         int combinerArity = combinerType.parameterCount();
         int resultArity = (dropResult ? 0 : 1);
@@ -872,8 +1128,9 @@ class LambdaFormEditor {
                                                    MethodType combinerType,
                                                    int[] argPositions,
                                                    boolean keepArguments,
-                                                   boolean dropResult) {
-        LambdaFormBuffer buf = buffer();
+                                                   boolean dropResult,
+                                                   LambdaFormName lfName) {
+        LambdaFormBuffer buf = buffer(lfName);
         buf.startEdit();
         int combinerArity = combinerType.parameterCount();
         assert(combinerArity == argPositions.length);
@@ -945,7 +1202,13 @@ class LambdaFormEditor {
             assert(form.returnType() == newType);
             return form;
         }
-        LambdaFormBuffer buf = buffer();
+        LambdaFormName lfName;
+        if (constantZero) {
+            lfName = LambdaFormName.filterReturnToZeroFormName(lambdaForm.methodType(), newType, lambdaForm.returnType());
+        } else {
+            lfName = LambdaFormName.filterReturnFormName(lambdaForm.methodType(), newType, newSpeciesData(L_TYPE), lambdaForm.returnType());
+        }
+        LambdaFormBuffer buf = buffer(lfName);
         buf.startEdit();
 
         int insPos = lambdaForm.names.length;
@@ -1047,7 +1310,8 @@ class LambdaFormEditor {
             assert(form.arity == lambdaForm.arity - (kind == FOLD_ARGS ? 1 : 0));
             return form;
         }
-        form = makeArgumentCombinationForm(foldPos, combinerType, true, dropResult);
+        LambdaFormName lfName = LambdaFormName.foldArgumentsFormName(lambdaForm.methodType(), foldPos, dropResult, combinerType);
+        form = makeArgumentCombinationForm(foldPos, combinerType, true, dropResult, lfName);
         return putInCache(key, form);
     }
 
@@ -1058,7 +1322,8 @@ class LambdaFormEditor {
             assert(form.arity == lambdaForm.arity - (dropResult ? 0 : 1));
             return form;
         }
-        form = makeArgumentCombinationForm(foldPos, combinerType, argPositions, true, dropResult);
+        LambdaFormName lfName = LambdaFormName.foldSelectArgumentsFormName(lambdaForm.methodType(), foldPos, dropResult, combinerType, argPositions);
+        form = makeArgumentCombinationForm(foldPos, combinerType, argPositions, true, dropResult, lfName);
         return putInCache(key, form);
     }
 
@@ -1069,7 +1334,8 @@ class LambdaFormEditor {
             assert(form.arity == lambdaForm.arity);
             return form;
         }
-        form = makeArgumentCombinationForm(filterPos, combinerType, argPositions, false, false);
+        LambdaFormName lfName = LambdaFormName.filterSelectArguments(lambdaForm.methodType(), filterPos, combinerType, argPositions);
+        form = makeArgumentCombinationForm(filterPos, combinerType, argPositions, false, false, lfName);
         return putInCache(key, form);
     }
 
@@ -1183,4 +1449,15 @@ class LambdaFormEditor {
         }
         return true;
     }
+
+    static {
+        // The Holder class will contain pre-generated forms resolved
+        // using MemberName.getFactory(). However, that doesn't initialize the
+        // class, which subtly breaks inlining etc. By forcing
+        // initialization of the Holder class we avoid these issues.
+        UNSAFE.ensureClassInitialized(LambdaFormEditor.Holder.class);
+    }
+
+    /* Placeholder class for LF combinators generated ahead of time */
+    final class Holder {}
 }

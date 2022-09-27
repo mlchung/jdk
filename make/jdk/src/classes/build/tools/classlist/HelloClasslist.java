@@ -47,6 +47,10 @@ import java.util.List;
 import java.util.Locale;
 import java.text.DateFormat;
 
+// AsSpreader
+import java.lang.reflect.*;
+import java.util.concurrent.Callable;
+
 import static java.util.stream.Collectors.*;
 
 /**
@@ -145,6 +149,7 @@ public class HelloClasslist {
         invoke(MethodHandles.identity(String.class), "x");
 
         invoke(handle("staticMethod_V", MethodType.methodType(void.class)));
+        AsSpreader.main(args);
 
         LOGGER.log(Level.FINE, "New Date: " + newDate + " - old: " + oldDate);
     }
@@ -171,5 +176,112 @@ public class HelloClasslist {
             LOGGER.warning("Failed to find, link and/or invoke " + mh.toString() + ": " + t.getMessage());
             throw t;
         }
+    }
+
+    static class AsSpreader {
+        public static void main(String... args) throws Throwable {
+            AsSpreader test = new AsSpreader(Nested.class.getDeclaredMethods());
+            Method m0 = ((Callable<Method>)(() -> {
+                for (Method m : test.methods) {
+                    if (Modifier.isStatic(m.getModifiers())) {
+                        return m;
+                    }
+                }
+                return null;
+            })).call();
+            Method m1 = ((Callable<Method>)(() -> {
+                for (Method m : test.methods) {
+                    if (!Modifier.isStatic(m.getModifiers())) {
+                        return m;
+                    }
+                }
+                return null;
+            })).call();
+
+            Method m = AsSpreader.class.getDeclaredMethod("m", int.class, long.class, Object.class);
+            Object[] a = new Object[] { new Object() };
+            m0.invoke(null, a);
+            m1.invoke(new Nested(), a);
+            m.invoke(null, new Object[] { 1, (long)2, new Object()});
+        }
+
+        private Method[] methods;
+        AsSpreader(Method[] methods) {
+            this.methods = methods;
+        }
+
+        static Object m(int i, long l, Object o) {
+            return o;
+        }
+        static class Nested {
+        //    static int x(int p) { return p;}
+
+            Object im00(Object p) { return p; }
+
+            static Object m00(Object p) {return p;}
+
+            static Object m01(Object p) {return p;}
+
+            static Object m02(Object p) {return p;}
+
+            static Object m03(Object p) {return p;}
+
+            static Object m04(Object p) {return p;}
+
+            static Object m05(Object p) {return p;}
+
+            static Object m06(Object p) {return p;}
+
+            static Object m07(Object p) {return p;}
+
+            static Object m08(Object p) {return p;}
+
+            static Object m09(Object p) {return p;}
+
+            static Object m0A(Object p) {return p;}
+
+            static Object m0B(Object p) {return p;}
+
+            static Object m0C(Object p) {return p;}
+
+            static Object m0D(Object p) {return p;}
+
+            static Object m0E(Object p) {return p;}
+
+            static Object m0F(Object p) {return p;}
+
+            static Object m10(Object p) {return p;}
+
+            static Object m11(Object p) {return p;}
+
+            static Object m12(Object p) {return p;}
+
+            static Object m13(Object p) {return p;}
+
+            static Object m14(Object p) {return p;}
+
+            static Object m15(Object p) {return p;}
+
+            static Object m16(Object p) {return p;}
+
+            static Object m17(Object p) {return p;}
+
+            static Object m18(Object p) {return p;}
+
+            static Object m19(Object p) {return p;}
+
+            static Object m1A(Object p) {return p;}
+
+            static Object m1B(Object p) {return p;}
+
+            static Object m1C(Object p) {return p;}
+
+            static Object m1D(Object p) {return p;}
+
+            static Object m1E(Object p) {return p;}
+
+            static Object m1F(Object p) {return p;}
+        }
+
     }
 }

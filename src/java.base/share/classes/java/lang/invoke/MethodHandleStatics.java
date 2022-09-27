@@ -64,6 +64,8 @@ class MethodHandleStatics {
     static final int MAX_ARITY;
     static final boolean VAR_HANDLE_IDENTITY_ADAPT;
 
+    static final boolean USE_NEW_CODE;
+
     static {
         Properties props = GetPropertyAction.privilegedGetProperties();
         DEBUG_METHOD_HANDLE_NAMES = Boolean.parseBoolean(
@@ -92,6 +94,9 @@ class MethodHandleStatics {
                 props.getProperty("java.lang.invoke.VarHandle.VAR_HANDLE_GUARDS", "true"));
         VAR_HANDLE_IDENTITY_ADAPT = Boolean.parseBoolean(
                 props.getProperty("java.lang.invoke.VarHandle.VAR_HANDLE_IDENTITY_ADAPT", "false"));
+
+        USE_NEW_CODE = Boolean.parseBoolean(
+                props.getProperty("java.lang.invoke.MethodHandle.USE_NEW_CODE", "true"));
 
         // Do not adjust this except for special platforms:
         MAX_ARITY = Integer.parseInt(
@@ -143,6 +148,17 @@ class MethodHandleStatics {
             CDS.traceSpeciesType("[SPECIES_RESOLVE]", cn);
         }
     }
+
+    /*non-public*/
+    static void traceLambdaFormCombinator(LambdaForm.Kind kind, MethodType type, String name) {
+        if (TRACE_RESOLVE) {
+            System.out.println("[LF_COMBINATOR] " + kind + " " + basicTypeSignature(type) + " " + name);
+        }
+        if (CDS.isDumpingClassList()) {
+            CDS.traceLambdaFormCombinator("[LF_COMBINATOR]", kind.toString(), shortenSignature(basicTypeSignature(type)), name);
+        }
+    }
+
     // handy shared exception makers (they simplify the common case code)
     /*non-public*/
     static InternalError newInternalError(String message) {

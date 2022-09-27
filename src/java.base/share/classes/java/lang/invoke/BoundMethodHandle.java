@@ -34,12 +34,12 @@ import java.util.List;
 import static java.lang.invoke.LambdaForm.BasicType;
 import static java.lang.invoke.LambdaForm.BasicType.*;
 import static java.lang.invoke.LambdaForm.BasicType.V_TYPE_NUM;
-import static java.lang.invoke.LambdaForm.BasicType.V_TYPE_NUM;
-import static java.lang.invoke.LambdaForm.BasicType.V_TYPE_NUM;
 import static java.lang.invoke.MethodHandles.Lookup.IMPL_LOOKUP;
 import static java.lang.invoke.MethodHandleNatives.Constants.*;
+import static java.lang.invoke.MethodHandleStatics.USE_NEW_CODE;
 import static java.lang.invoke.MethodHandleStatics.newInternalError;
 import static java.lang.invoke.MethodHandleStatics.uncaughtException;
+
 
 /**
  * The flavor of method handle which emulates an invoke instruction
@@ -110,7 +110,7 @@ abstract non-sealed class BoundMethodHandle extends MethodHandle {
     }
     @Override
     BoundMethodHandle rebind() {
-        if (!tooComplex()) {
+        if (!USE_NEW_CODE && !tooComplex()) {
             return this;
         }
         return makeReinvoker(this);

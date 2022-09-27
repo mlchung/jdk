@@ -29,17 +29,23 @@ import jdk.internal.org.objectweb.asm.ClassWriter;
 import jdk.internal.org.objectweb.asm.Opcodes;
 import sun.invoke.util.Wrapper;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Stream;
+import java.lang.invoke.LambdaFormEditor.LambdaFormName;
 
 import static java.lang.invoke.LambdaForm.BasicType.*;
 import static java.lang.invoke.MethodHandleStatics.CLASSFILE_VERSION;
+import static java.lang.invoke.MethodHandleStatics.newInternalError;
 import static java.lang.invoke.MethodTypeForm.*;
 import static java.lang.invoke.LambdaForm.Kind.*;
 
@@ -63,6 +69,7 @@ class GenerateJLIClassesHelper {
     static final String DIRECT_HOLDER = "java/lang/invoke/DirectMethodHandle$Holder";
     static final String DELEGATING_HOLDER = "java/lang/invoke/DelegatingMethodHandle$Holder";
     static final String BASIC_FORMS_HOLDER = "java/lang/invoke/LambdaForm$Holder";
+    static final String TRANSFORMED_FORMS_HOLDER = "java/lang/invoke/LambdaFormEditor$Holder";
     static final String INVOKERS_HOLDER = "java/lang/invoke/Invokers$Holder";
     static final String INVOKERS_HOLDER_CLASS_NAME = INVOKERS_HOLDER.replace('/', '.');
     static final String BMH_SPECIES_PREFIX = "java.lang.invoke.BoundMethodHandle$Species_";
@@ -74,6 +81,7 @@ class GenerateJLIClassesHelper {
         private final TreeSet<String> invokerTypes = new TreeSet<>();
         private final TreeSet<String> callSiteTypes = new TreeSet<>();
         private final Map<String, Set<String>> dmhMethods = new TreeMap<>();
+        private final Map<String, Map<String, Set<String>>> transformedForms = new TreeMap<>();
 
         HolderClassBuilder addSpeciesType(String type) {
             speciesTypes.add(expandSignature(type));
@@ -89,6 +97,13 @@ class GenerateJLIClassesHelper {
         HolderClassBuilder addCallSiteType(String csType) {
             validateMethodType(csType);
             callSiteTypes.add(csType);
+            return this;
+        }
+
+        HolderClassBuilder addTransformedForm(String kind, String type, String name) {
+            Map<String, Set<String>> map = transformedForms.computeIfAbsent(kind, k -> new TreeMap<>());
+            Set<String> names = map.computeIfAbsent(type, t -> new TreeSet<>());
+            names.add(name);
             return this;
         }
 
@@ -163,6 +178,25 @@ class GenerateJLIClassesHelper {
                 index++;
             }
 
+            Map<LambdaForm.Kind, Map<MethodType, Set<String>>> newMap = new LinkedHashMap<>();
+            for (String kind : transformedForms.keySet()) {
+                LambdaForm.Kind lfkind = LambdaForm.Kind.valueOf(LambdaForm.Kind.class, kind);
+                Map<MethodType, Set<String>> map = newMap.computeIfAbsent(lfkind, k -> new LinkedHashMap<>());
+                Map<String, Set<String>> set = transformedForms.get(kind);
+                for (Map.Entry<String, Set<String>> e : set.entrySet()) {
+                    String type = e.getKey();
+                    MethodType mt = asMethodType(type);
+                    // The type to actually ask for is retrieved by removing
+                    // the first argument, which needs to be of Object.class
+                    if (mt.parameterCount() < 1 ||
+                            mt.parameterType(0) != Object.class) {
+                        throw new RuntimeException(
+                                "type parameter must start with L: " + mt + " " + type);
+                    }
+                    map.put(mt.dropParameterTypes(0, 1), e.getValue());
+                }
+            }
+
             Map<String, byte[]> result = new TreeMap<>();
             result.put(DIRECT_HOLDER,
                        generateDirectMethodHandleHolderClassBytes(
@@ -175,7 +209,8 @@ class GenerateJLIClassesHelper {
                             invokerMethodTypes, callSiteMethodTypes));
             result.put(BASIC_FORMS_HOLDER,
                        generateBasicFormsClassBytes(BASIC_FORMS_HOLDER));
-
+            result.put(TRANSFORMED_FORMS_HOLDER,
+                       generateTransformedFormsClassBytes(TRANSFORMED_FORMS_HOLDER, newMap));
             speciesTypes.forEach(types -> {
                 Map.Entry<String, byte[]> entry = generateConcreteBMHClassBytes(types);
                 result.put(entry.getKey(), entry.getValue());
@@ -324,6 +359,13 @@ class GenerateJLIClassesHelper {
                                     builder.addDMHMethodType(dmh, methodType);
                                 }
                             }
+                            break;
+                        case "[LF_COMBINATOR]":
+                            assert parts.length == 4;
+                            String kind = parts[1];
+                            String type = parts[2];
+                            String lambdaName = parts[3];
+                            builder.addTransformedForm(kind, type, lambdaName);
                             break;
                         default:
                             break; // ignore
@@ -497,6 +539,120 @@ class GenerateJLIClassesHelper {
         return generateCodeBytesForLFs(className,
                 names.toArray(new String[0]),
                 forms.toArray(new LambdaForm[0]));
+    }
+
+    /**
+     * Returns a {@code byte[]} representation of a class implementing
+     * LambdaFormEditor of each {@code MethodType} kind in the
+     * {@code methodTypes} argument.
+     */
+    static byte[] generateTransformedFormsClassBytes(String className,
+                                                     Map<LambdaForm.Kind, Map<MethodType, Set<String>>> transformedForms) {
+
+        ArrayList<LambdaForm> forms = new ArrayList<>();
+        ArrayList<String> names = new ArrayList<>();
+        Map<MethodType, Set<String>> dropArguments = transformedForms.getOrDefault(ADD_ARG, Map.of());
+        for (MethodType type : dropArguments.keySet()) {
+            for (String name : dropArguments.get(type)) {
+                LambdaForm lform = makeReinvokerFor(type);
+                LambdaFormName lfName = new LambdaFormName(ADD_ARG, type, name);
+                forms.add(lfName.makeAddArgumentForm(lform));
+                names.add(name);
+            }
+        }
+
+        Map<MethodType, Set<String>> bindArguments = transformedForms.getOrDefault(BIND_ARG, Map.of());
+        for (MethodType type : bindArguments.keySet()) {
+            for (String name : bindArguments.get(type)) {
+                LambdaForm lform = makeReinvokerFor(type);
+                LambdaFormName lfName = new LambdaFormName(BIND_ARG, type, name);
+                lform = lfName.makeBindArgumentForm(lform);
+                if (lform != null) {
+                    forms.add(lform);
+                    names.add(name);
+                }
+            }
+        }
+
+        Map<MethodType, Set<String>> guardWithCatches = transformedForms.getOrDefault(GUARD_WITH_CATCH, Map.of());
+        for (MethodType type : guardWithCatches.keySet()) {
+            for (String name : guardWithCatches.get(type)) {
+                LambdaFormName lfName = new LambdaFormName(GUARD_WITH_CATCH, type, name);
+                forms.add(lfName.makeGuardWithCatchForm());
+                names.add(name);
+            }
+        }
+        Map<MethodType, Set<String>> filterReturns = transformedForms.getOrDefault(FILTER_RETURN, Map.of());
+        for (MethodType type : filterReturns.keySet()) {
+            for (String name : filterReturns.get(type)) {
+                LambdaForm lform = makeReinvokerFor(type);
+                LambdaFormName lfName = new LambdaFormName(FILTER_RETURN, type, name);
+                lform = lfName.makeFilterReturnForm(lform);
+                if (lform != null) {
+                    forms.add(lform);
+                    names.add(name);
+                }
+            }
+        }
+
+        Map<MethodType, Set<String>> filterReturnToZeros = transformedForms.getOrDefault(FILTER_RETURN_TO_ZERO, Map.of());
+        for (MethodType type : filterReturnToZeros.keySet()) {
+            for (String name : filterReturnToZeros.get(type)) {
+                LambdaForm lform = makeReinvokerFor(type);
+                LambdaFormName lfName = new LambdaFormName(FILTER_RETURN_TO_ZERO, type, name);
+                forms.add(lfName.makeFilterReturnToZeroForm(lform));
+                names.add(name);
+            }
+        }
+
+        Map<MethodType, Set<String>> spreadArguments = transformedForms.getOrDefault(SPREAD_ARGS, Map.of());
+        for (MethodType type : spreadArguments.keySet()) {
+            for (String name : spreadArguments.get(type)) {
+                LambdaForm lform = makeReinvokerFor(type);
+                LambdaFormName lfName = new LambdaFormName(SPREAD_ARGS, type, name);
+                forms.add(lfName.makeSpreadArgumentsForm(lform));
+                names.add(name);
+            }
+        }
+        Map<MethodType, Set<String>> collectors = transformedForms.getOrDefault(COLLECTOR, Map.of());
+        for (MethodType type : collectors.keySet()) {
+            for (String name : collectors.get(type)) {
+                LambdaFormName lfName = new LambdaFormName(COLLECTOR, type, name);
+                forms.add(lfName.makeCollectorForm());
+                names.add(name);
+            }
+        }
+
+        byte[] bytes = generateCodeBytesForLFs(className,
+                                               names.toArray(new String[0]),
+                                               forms.toArray(new LambdaForm[0]));
+
+        maybeDump(className, bytes);
+        return bytes;
+    }
+
+    static final BoundMethodHandle.SpeciesData L = BoundMethodHandle.speciesData_L();
+    static final MethodHandle L_0 = L.getter(0);
+
+    @SuppressWarnings("removal")
+    static void maybeDump(final String className, final byte[] classFile) {
+            java.security.AccessController.doPrivileged(
+                    new java.security.PrivilegedAction<>() {
+                        public Void run() {
+                            try {
+                                String dumpName = className.replace('.','/');
+                                File dumpFile = new File("JIMAGE", dumpName+".class");
+                                System.out.println("dump: " + dumpFile.getAbsolutePath());
+                                dumpFile.getParentFile().mkdirs();
+                                FileOutputStream file = new FileOutputStream(dumpFile);
+                                file.write(classFile);
+                                file.close();
+                                return null;
+                            } catch (IOException ex) {
+                                throw newInternalError(ex);
+                            }
+                        }
+                    });
     }
 
     /*

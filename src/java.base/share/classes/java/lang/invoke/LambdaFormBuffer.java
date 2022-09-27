@@ -43,10 +43,14 @@ final class LambdaFormBuffer {
     private int firstChange;
     private Name resultName;
     private ArrayList<Name> dups;
+    private final Kind kind;
+    private final String lambdaName;
 
     private static final int F_TRANS = 0x10, F_OWNED = 0x03;
-
     LambdaFormBuffer(LambdaForm lf) {
+        this(lf, Kind.GENERIC, null);
+    }
+    LambdaFormBuffer(LambdaForm lf, Kind kind, String lambdaName) {
         this.arity = lf.arity;
         setNames(lf.names);
         int result = lf.result;
@@ -54,12 +58,14 @@ final class LambdaFormBuffer {
         if (result >= 0 && lf.names[result].type != V_TYPE) {
             resultName = lf.names[result];
         }
+        this.kind = kind;
+        this.lambdaName = lambdaName;
         assert(lf.nameRefsAreLegal());
     }
 
     private LambdaForm lambdaForm() {
         assert(!inTrans());  // need endEdit call to tidy things up
-        return new LambdaForm(arity, nameArray(), resultIndex());
+        return new LambdaForm(arity, nameArray(), resultIndex(), kind, lambdaName);
     }
 
     Name name(int i) {

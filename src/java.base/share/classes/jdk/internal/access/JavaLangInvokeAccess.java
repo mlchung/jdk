@@ -168,10 +168,9 @@ public interface JavaLangInvokeAccess {
     MethodHandle reflectiveInvoker(Class<?> caller);
 
     /**
-     * Defines a hidden class of the given name and bytes with class data.
-     * The given bytes is trusted.
+     * Clear soft asType Cache.
      */
-    Lookup defineHiddenClassWithClassData(Lookup caller, String name, byte[] bytes, Object classData, boolean initialize);
+    void clearSoftAsTypeCache(MethodHandle mh);
 
     /**
      * A best-effort method that tries to find any exceptions thrown by the given method handle.
