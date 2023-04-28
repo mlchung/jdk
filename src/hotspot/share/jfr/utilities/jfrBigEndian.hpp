@@ -26,7 +26,8 @@
 #define SHARE_JFR_UTILITIES_JFRBIGENDIAN_HPP
 
 #include "memory/allStatic.hpp"
-#include "utilities/bytes.hpp"
+#include "utilities/byteswap.hpp"
+#include "utilities/globalDefinitions.hpp"
 #include "utilities/macros.hpp"
 
 #ifndef VM_LITTLE_ENDIAN
@@ -34,9 +35,9 @@
 # define bigendian_32(x) (x)
 # define bigendian_64(x) (x)
 #else
-# define bigendian_16(x) Bytes::swap_u2(x)
-# define bigendian_32(x) Bytes::swap_u4(x)
-# define bigendian_64(x) Bytes::swap_u8(x)
+# define bigendian_16(x) byteswap<u2>(x)
+# define bigendian_32(x) byteswap<u4>(x)
+# define bigendian_64(x) byteswap<u8>(x)
 #endif
 
 class JfrBigEndian : AllStatic {
@@ -102,7 +103,7 @@ inline T JfrBigEndian::read_unaligned(const address location) {
 inline bool JfrBigEndian::platform_supports_unaligned_reads(void) {
 #if defined(IA32) || defined(AMD64) || defined(PPC) || defined(S390)
   return true;
-#elif defined(ARM) || defined(AARCH64)
+#elif defined(ARM) || defined(AARCH64) || defined(RISCV)
   return false;
 #else
   #warning "Unconfigured platform"

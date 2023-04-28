@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,6 +31,8 @@ import java.io.UncheckedIOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.net.URI;
+import java.net.http.HttpResponse.BodyHandler;
+import java.net.http.HttpResponse.ResponseInfo;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -135,6 +137,7 @@ class Stream<T> extends ExchangeImpl<T> {
     private volatile boolean remotelyClosed;
     private volatile boolean closed;
     private volatile boolean endStreamSent;
+    private volatile boolean finalResponseCodeReceived;
     // Indicates the first reason that was invoked when sending a ResetFrame
     // to the server. A streamState of 0 indicates that no reset was sent.
     // (see markStream(int code)
@@ -173,10 +176,9 @@ class Stream<T> extends ExchangeImpl<T> {
                 if (subscriber == null) {
                     // can't process anything yet
                     return;
-                } else {
-                    if (debug.on()) debug.log("subscribing user subscriber");
-                    subscriber.onSubscribe(userSubscription);
                 }
+                if (debug.on()) debug.log("subscribing user subscriber");
+                subscriber.onSubscribe(userSubscription);
             }
             while (!inputQ.isEmpty()) {
                 Http2Frame frame = inputQ.peek();
@@ -272,6 +274,7 @@ class Stream<T> extends ExchangeImpl<T> {
         if (debug.on()) debug.log("nullBody: streamid=%d", streamid);
         // We should have an END_STREAM data frame waiting in the inputQ.
         // We need a subscriber to force the scheduler to process it.
+        assert pendingResponseSubscriber == null;
         pendingResponseSubscriber = HttpResponse.BodySubscribers.replacing(null);
         sched.runOrSchedule();
     }
@@ -299,6 +302,16 @@ class Stream<T> extends ExchangeImpl<T> {
         return endStream;
     }
 
+    @Override
+    void expectContinueFailed(int rcode) {
+        // Have to mark request as sent, due to no request body being sent in the
+        // event of a 417 Expectation Failed or some other non 100 response code
+        requestSent();
+    }
+
+    // This method is called by Http2Connection::decrementStreamCount in order
+    // to make sure that the stream count is decremented only once for
+    // a given stream.
     boolean deRegister() {
         return DEREGISTERED.compareAndSet(this, false, true);
     }
@@ -311,7 +324,8 @@ class Stream<T> extends ExchangeImpl<T> {
         try {
             Log.logTrace("Reading body on stream {0}", streamid);
             debug.log("Getting BodySubscriber for: " + response);
-            BodySubscriber<T> bodySubscriber = handler.apply(new ResponseInfoImpl(response));
+            Http2StreamResponseSubscriber<T> bodySubscriber =
+                    createResponseSubscriber(handler, new ResponseInfoImpl(response));
             CompletableFuture<T> cf = receiveData(bodySubscriber, executor);
 
             PushGroup<?> pg = exchange.getPushGroup();
@@ -325,6 +339,24 @@ class Stream<T> extends ExchangeImpl<T> {
             cancelImpl(t);
             return MinimalFuture.failedFuture(t);
         }
+    }
+
+    @Override
+    Http2StreamResponseSubscriber<T> createResponseSubscriber(BodyHandler<T> handler, ResponseInfo response) {
+        Http2StreamResponseSubscriber<T> subscriber =
+                new Http2StreamResponseSubscriber<>(handler.apply(response));
+        return subscriber;
+    }
+
+    // The Http2StreamResponseSubscriber is registered with the HttpClient
+    // to ensure that it gets completed if the SelectorManager aborts due
+    // to unexpected exceptions.
+    private boolean registerResponseSubscriber(Http2StreamResponseSubscriber<?> subscriber) {
+        return client().registerSubscriber(subscriber);
+    }
+
+    private boolean unregisterResponseSubscriber(Http2StreamResponseSubscriber<?> subscriber) {
+        return client().unregisterSubscriber(subscriber);
     }
 
     @Override
@@ -384,10 +416,13 @@ class Stream<T> extends ExchangeImpl<T> {
         if (isCanceled()) {
             Throwable t = getCancelCause();
             responseBodyCF.completeExceptionally(t);
-        } else {
-            pendingResponseSubscriber = bodySubscriber;
-            sched.runOrSchedule(); // in case data waiting already to be processed
         }
+
+        // ensure that the body subscriber will be subscribed and onError() is
+        // invoked
+        pendingResponseSubscriber = bodySubscriber;
+        sched.runOrSchedule(); // in case data waiting already to be processed, or error
+
         return responseBodyCF;
     }
 
@@ -414,7 +449,7 @@ class Stream<T> extends ExchangeImpl<T> {
     private boolean checkRequestCancelled() {
         if (exchange.multi.requestCancelled()) {
             if (errorRef.get() == null) cancel();
-            else sendCancelStreamFrame();
+            else sendResetStreamFrame(ResetFrame.CANCEL);
             return true;
         }
         return false;
@@ -439,8 +474,14 @@ class Stream<T> extends ExchangeImpl<T> {
                 receiveDataFrame(new DataFrame(streamid, DataFrame.END_STREAM, List.of()));
             }
         } else if (frame instanceof DataFrame) {
-            if (cancelled) connection.dropDataFrame((DataFrame) frame);
-            else receiveDataFrame((DataFrame) frame);
+            if (cancelled) {
+                if (debug.on()) {
+                    debug.log("request cancelled or stream closed: dropping data frame");
+                }
+                connection.dropDataFrame((DataFrame) frame);
+            } else {
+                receiveDataFrame((DataFrame) frame);
+            }
         } else {
             if (!cancelled) otherFrame(frame);
         }
@@ -459,35 +500,49 @@ class Stream<T> extends ExchangeImpl<T> {
     // The Hpack decoder decodes into one of these consumers of name,value pairs
 
     DecodingCallback rspHeadersConsumer() {
-        return rspHeadersConsumer;
+        return rspHeadersConsumer::onDecoded;
     }
 
     protected void handleResponse() throws IOException {
         HttpHeaders responseHeaders = responseHeadersBuilder.build();
-        responseCode = (int)responseHeaders
-                .firstValueAsLong(":status")
-                .orElseThrow(() -> new IOException("no statuscode in response"));
 
-        response = new Response(
-                request, exchange, responseHeaders, connection(),
-                responseCode, HttpClient.Version.HTTP_2);
+        if (!finalResponseCodeReceived) {
+            responseCode = (int) responseHeaders
+                    .firstValueAsLong(":status")
+                    .orElseThrow(() -> new IOException("no statuscode in response"));
+            // If informational code, response is partially complete
+            if (responseCode < 100 || responseCode > 199)
+                this.finalResponseCodeReceived = true;
+
+            response = new Response(
+                    request, exchange, responseHeaders, connection(),
+                    responseCode, HttpClient.Version.HTTP_2);
 
         /* TODO: review if needs to be removed
            the value is not used, but in case `content-length` doesn't parse as
            long, there will be NumberFormatException. If left as is, make sure
            code up the stack handles NFE correctly. */
-        responseHeaders.firstValueAsLong("content-length");
+            responseHeaders.firstValueAsLong("content-length");
 
-        if (Log.headers()) {
-            StringBuilder sb = new StringBuilder("RESPONSE HEADERS:\n");
-            Log.dumpHeaders(sb, "    ", responseHeaders);
-            Log.logHeaders(sb.toString());
+            if (Log.headers()) {
+                StringBuilder sb = new StringBuilder("RESPONSE HEADERS:\n");
+                Log.dumpHeaders(sb, "    ", responseHeaders);
+                Log.logHeaders(sb.toString());
+            }
+
+            // this will clear the response headers
+            rspHeadersConsumer.reset();
+
+            completeResponse(response);
+        } else {
+            if (Log.headers()) {
+                StringBuilder sb = new StringBuilder("TRAILING HEADERS:\n");
+                Log.dumpHeaders(sb, "    ", responseHeaders);
+                Log.logHeaders(sb.toString());
+            }
+            rspHeadersConsumer.reset();
         }
 
-        // this will clear the response headers
-        rspHeadersConsumer.reset();
-
-        completeResponse(response);
     }
 
     void incoming_reset(ResetFrame frame) {
@@ -500,9 +555,9 @@ class Stream<T> extends ExchangeImpl<T> {
             Flow.Subscriber<?> subscriber =
                     responseSubscriber == null ? pendingResponseSubscriber : responseSubscriber;
             if (response == null && subscriber == null) {
-                // we haven't receive the headers yet, and won't receive any!
+                // we haven't received the headers yet, and won't receive any!
                 // handle reset now.
-                handleReset(frame, subscriber);
+                handleReset(frame, null);
             } else {
                 // put it in the input queue in order to read all
                 // pending data frames first. Indeed, a server may send
@@ -716,9 +771,14 @@ class Stream<T> extends ExchangeImpl<T> {
         hdrs.setHeader(":method", method);
         URI uri = request.uri();
         hdrs.setHeader(":scheme", uri.getScheme());
-        // TODO: userinfo deprecated. Needs to be removed
-        hdrs.setHeader(":authority", uri.getAuthority());
-        // TODO: ensure header names beginning with : not in user headers
+        String host = uri.getHost();
+        int port = uri.getPort();
+        assert host != null;
+        if (port != -1) {
+            hdrs.setHeader(":authority", host + ":" + port);
+        } else {
+            hdrs.setHeader(":authority", host);
+        }
         String query = uri.getRawQuery();
         String path = uri.getRawPath();
         if (path == null || path.isEmpty()) {
@@ -1203,6 +1263,16 @@ class Stream<T> extends ExchangeImpl<T> {
         cancelImpl(cause);
     }
 
+    @Override
+    void onProtocolError(final IOException cause) {
+        if (debug.on()) {
+            debug.log("cancelling exchange on stream %d due to protocol error: %s", streamid, cause.getMessage());
+        }
+        Log.logError("cancelling exchange on stream {0} due to protocol error: {1}\n", streamid, cause);
+        // send a RESET frame and close the stream
+        cancelImpl(cause, ResetFrame.PROTOCOL_ERROR);
+    }
+
     void connectionClosing(Throwable cause) {
         Flow.Subscriber<?> subscriber =
                 responseSubscriber == null ? pendingResponseSubscriber : responseSubscriber;
@@ -1214,6 +1284,10 @@ class Stream<T> extends ExchangeImpl<T> {
 
     // This method sends a RST_STREAM frame
     void cancelImpl(Throwable e) {
+        cancelImpl(e, ResetFrame.CANCEL);
+    }
+
+    private void cancelImpl(final Throwable e, final int resetFrameErrCode) {
         errorRef.compareAndSet(null, e);
         if (debug.on()) {
             if (streamid == 0) debug.log("cancelling stream: %s", (Object)e);
@@ -1231,10 +1305,24 @@ class Stream<T> extends ExchangeImpl<T> {
                 }
             }
         }
+
         if (closing) { // true if the stream has not been closed yet
-            if (responseSubscriber != null || pendingResponseSubscriber != null)
+            if (responseSubscriber != null || pendingResponseSubscriber != null) {
+                if (debug.on())
+                    debug.log("stream %s closing due to %s", streamid, (Object)errorRef.get());
                 sched.runOrSchedule();
+            } else {
+                if (debug.on())
+                    debug.log("stream %s closing due to %s before subscriber registered",
+                        streamid, (Object)errorRef.get());
+            }
+        } else {
+            if (debug.on()) {
+                debug.log("stream %s already closed due to %s",
+                        streamid, (Object)errorRef.get());
+            }
         }
+
         completeResponseExceptionally(e);
         if (!requestBodyCF.isDone()) {
             requestBodyCF.completeExceptionally(errorRef.get()); // we may be sending the body..
@@ -1245,14 +1333,14 @@ class Stream<T> extends ExchangeImpl<T> {
         try {
             // will send a RST_STREAM frame
             if (streamid != 0 && streamState == 0) {
-                e = Utils.getCompletionCause(e);
-                if (e instanceof EOFException) {
+                final Throwable cause = Utils.getCompletionCause(e);
+                if (cause instanceof EOFException) {
                     // read EOF: no need to try & send reset
                     connection.decrementStreamsCount(streamid);
                     connection.closeStream(streamid);
                 } else {
                     // no use to send CANCEL if already closed.
-                    sendCancelStreamFrame();
+                    sendResetStreamFrame(resetFrameErrCode);
                 }
             }
         } catch (Throwable ex) {
@@ -1260,10 +1348,10 @@ class Stream<T> extends ExchangeImpl<T> {
         }
     }
 
-    void sendCancelStreamFrame() {
+    void sendResetStreamFrame(final int resetFrameErrCode) {
         // do not reset a stream until it has a streamid.
-        if (streamid > 0 && markStream(ResetFrame.CANCEL) == 0) {
-            connection.resetStream(streamid, ResetFrame.CANCEL);
+        if (streamid > 0 && markStream(resetFrameErrCode) == 0) {
+            connection.resetStream(streamid, resetFrameErrCode);
         }
         close();
     }
@@ -1278,6 +1366,20 @@ class Stream<T> extends ExchangeImpl<T> {
         if (debug.on()) debug.log("close stream %d", streamid);
         Log.logTrace("Closing stream {0}", streamid);
         connection.closeStream(streamid);
+        var s = responseSubscriber == null
+                ? pendingResponseSubscriber
+                : responseSubscriber;
+        if (debug.on()) debug.log("subscriber is %s", s);
+        if (s instanceof Http2StreamResponseSubscriber<?> sw) {
+            if (debug.on()) debug.log("closing response subscriber stream %s", streamid);
+            // if the subscriber has already completed,
+            // there is nothing to do...
+            if (!sw.completed()) {
+                // otherwise make sure it will be completed
+                var cause = errorRef.get();
+                sw.complete(cause == null ? new IOException("stream closed") : cause);
+            }
+        }
         Log.logTrace("Stream {0} closed", streamid);
     }
 
@@ -1289,6 +1391,7 @@ class Stream<T> extends ExchangeImpl<T> {
         CompletableFuture<HttpResponse<T>> responseCF;
         final HttpRequestImpl pushReq;
         HttpResponse.BodyHandler<T> pushHandler;
+        private volatile boolean finalPushResponseCodeReceived;
 
         PushedStream(PushGroup<T> pushGroup,
                      Http2Connection connection,
@@ -1385,35 +1488,48 @@ class Stream<T> extends ExchangeImpl<T> {
         @Override
         protected void handleResponse() {
             HttpHeaders responseHeaders = responseHeadersBuilder.build();
-            responseCode = (int)responseHeaders
-                .firstValueAsLong(":status")
-                .orElse(-1);
 
-            if (responseCode == -1) {
-                completeResponseExceptionally(new IOException("No status code"));
+            if (!finalPushResponseCodeReceived) {
+                responseCode = (int)responseHeaders
+                    .firstValueAsLong(":status")
+                    .orElse(-1);
+
+                if (responseCode == -1) {
+                    completeResponseExceptionally(new IOException("No status code"));
+                }
+
+                this.finalPushResponseCodeReceived = true;
+
+                this.response = new Response(
+                        pushReq, exchange, responseHeaders, connection(),
+                        responseCode, HttpClient.Version.HTTP_2);
+
+                /* TODO: review if needs to be removed
+                   the value is not used, but in case `content-length` doesn't parse
+                   as long, there will be NumberFormatException. If left as is, make
+                   sure code up the stack handles NFE correctly. */
+                responseHeaders.firstValueAsLong("content-length");
+
+                if (Log.headers()) {
+                    StringBuilder sb = new StringBuilder("RESPONSE HEADERS");
+                    sb.append(" (streamid=").append(streamid).append("):\n");
+                    Log.dumpHeaders(sb, "    ", responseHeaders);
+                    Log.logHeaders(sb.toString());
+                }
+
+                rspHeadersConsumer.reset();
+
+                // different implementations for normal streams and pushed streams
+                completeResponse(response);
+            } else {
+                if (Log.headers()) {
+                    StringBuilder sb = new StringBuilder("TRAILING HEADERS");
+                    sb.append(" (streamid=").append(streamid).append("):\n");
+                    Log.dumpHeaders(sb, "    ", responseHeaders);
+                    Log.logHeaders(sb.toString());
+                }
+                rspHeadersConsumer.reset();
             }
-
-            this.response = new Response(
-                pushReq, exchange, responseHeaders, connection(),
-                responseCode, HttpClient.Version.HTTP_2);
-
-            /* TODO: review if needs to be removed
-               the value is not used, but in case `content-length` doesn't parse
-               as long, there will be NumberFormatException. If left as is, make
-               sure code up the stack handles NFE correctly. */
-            responseHeaders.firstValueAsLong("content-length");
-
-            if (Log.headers()) {
-                StringBuilder sb = new StringBuilder("RESPONSE HEADERS");
-                sb.append(" (streamid=").append(streamid).append("):\n");
-                Log.dumpHeaders(sb, "    ", responseHeaders);
-                Log.logHeaders(sb.toString());
-            }
-
-            rspHeadersConsumer.reset();
-
-            // different implementations for normal streams and pushed streams
-            completeResponse(response);
         }
     }
 
@@ -1461,9 +1577,10 @@ class Stream<T> extends ExchangeImpl<T> {
         return connection.dbgString() + "/Stream("+streamid+")";
     }
 
-    private class HeadersConsumer extends Http2Connection.ValidatingHeadersConsumer {
+    private class HeadersConsumer extends ValidatingHeadersConsumer {
 
-        void reset() {
+        @Override
+        public void reset() {
             super.reset();
             responseHeadersBuilder.clear();
             debug.log("Response builder cleared, ready to receive new headers.");
@@ -1473,15 +1590,45 @@ class Stream<T> extends ExchangeImpl<T> {
         public void onDecoded(CharSequence name, CharSequence value)
             throws UncheckedIOException
         {
-            String n = name.toString();
-            String v = value.toString();
-            super.onDecoded(n, v);
-            responseHeadersBuilder.addHeader(n, v);
-            if (Log.headers() && Log.trace()) {
-                Log.logTrace("RECEIVED HEADER (streamid={0}): {1}: {2}",
-                             streamid, n, v);
+            try {
+                String n = name.toString();
+                String v = value.toString();
+                super.onDecoded(n, v);
+                responseHeadersBuilder.addHeader(n, v);
+                if (Log.headers() && Log.trace()) {
+                    Log.logTrace("RECEIVED HEADER (streamid={0}): {1}: {2}",
+                            streamid, n, v);
+                }
+            } catch (UncheckedIOException uio) {
+                // reset stream: From RFC 9113, section 8.1
+                // Malformed requests or responses that are detected MUST be
+                // treated as a stream error (Section 5.4.2) of type
+                // PROTOCOL_ERROR.
+                onProtocolError(uio.getCause());
             }
         }
+
+        @Override
+        protected String formatMessage(String message, String header) {
+            return "malformed response: " + super.formatMessage(message, header);
+        }
+    }
+
+    final class Http2StreamResponseSubscriber<U> extends HttpBodySubscriberWrapper<U> {
+        Http2StreamResponseSubscriber(BodySubscriber<U> subscriber) {
+            super(subscriber);
+        }
+
+        @Override
+        protected void register() {
+            registerResponseSubscriber(this);
+        }
+
+        @Override
+        protected void unregister() {
+            unregisterResponseSubscriber(this);
+        }
+
     }
 
     private static final VarHandle STREAM_STATE;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -268,7 +268,7 @@ void LinearScan::propagate_spill_slots() {
 // create a new interval with a predefined reg_num
 // (only used for parent intervals that are created during the building phase)
 Interval* LinearScan::create_interval(int reg_num) {
-  assert(_intervals.at(reg_num) == NULL, "overwriting exisiting interval");
+  assert(_intervals.at(reg_num) == NULL, "overwriting existing interval");
 
   Interval* interval = new Interval(reg_num);
   _intervals.at_put(reg_num, interval);
@@ -384,7 +384,7 @@ bool LinearScan::must_store_at_definition(const Interval* i) {
   return i->is_split_parent() && i->spill_state() == storeAtDefinition;
 }
 
-// called once before asignment of register numbers
+// called once before assignment of register numbers
 void LinearScan::eliminate_spill_moves() {
   TIME_LINEAR_SCAN(timer_eliminate_spill_moves);
   TRACE_LINEAR_SCAN(3, tty->print_cr("***** Eliminating unnecessary spill moves"));
@@ -540,8 +540,8 @@ void LinearScan::set_live_gen_kill(Value value, LIR_Op* op, BitMap& live_gen, Bi
 
   // check some asumptions about debug information
   assert(!value->type()->is_illegal(), "if this local is used by the interpreter it shouldn't be of indeterminate type");
-  assert(con == NULL || opr->is_virtual() || opr->is_constant() || opr->is_illegal(), "asumption: Constant instructions have only constant operands");
-  assert(con != NULL || opr->is_virtual(), "asumption: non-Constant instructions have only virtual operands");
+  assert(con == NULL || opr->is_virtual() || opr->is_constant() || opr->is_illegal(), "assumption: Constant instructions have only constant operands");
+  assert(con != NULL || opr->is_virtual(), "assumption: non-Constant instructions have only virtual operands");
 
   if ((con == NULL || con->is_pinned()) && opr->is_register()) {
     assert(reg_num(opr) == opr->vreg_number() && !is_valid_reg_num(reg_numHi(opr)), "invalid optimization below");
@@ -1240,11 +1240,11 @@ void LinearScan::add_register_hints(LIR_Op* op) {
       break;
     }
     case lir_cmove: {
-      assert(op->as_Op2() != NULL, "lir_cmove must be LIR_Op2");
-      LIR_Op2* cmove = (LIR_Op2*)op;
+      assert(op->as_Op4() != NULL, "lir_cmove must be LIR_Op4");
+      LIR_Op4* cmove = (LIR_Op4*)op;
 
       LIR_Opr move_from = cmove->in_opr1();
-      LIR_Opr move_to = cmove->result_opr();
+      LIR_Opr move_to   = cmove->result_opr();
 
       if (move_to->is_register() && move_from->is_register()) {
         Interval* from = interval_at(reg_num(move_from));
@@ -1329,10 +1329,9 @@ void LinearScan::build_intervals() {
     assert(block_to   == instructions->at(instructions->length() - 1)->id(), "must be");
 
     // Update intervals for registers live at the end of this block;
-    ResourceBitMap live = block->live_out();
-    int size = (int)live.size();
-    for (int number = (int)live.get_next_one_offset(0, size); number < size; number = (int)live.get_next_one_offset(number + 1, size)) {
-      assert(live.at(number), "should not stop here otherwise");
+    ResourceBitMap& live = block->live_out();
+    auto updater = [&](BitMap::idx_t index) {
+      int number = static_cast<int>(index);
       assert(number >= LIR_Opr::vreg_base, "fixed intervals must not be live on block bounds");
       TRACE_LINEAR_SCAN(2, tty->print_cr("live in %d to %d", number, block_to + 2));
 
@@ -1347,7 +1346,8 @@ void LinearScan::build_intervals() {
           is_interval_in_loop(number, block->loop_index())) {
         interval_at(number)->add_use_pos(block_to + 1, loopEndMarker);
       }
-    }
+    };
+    live.iterate(updater);
 
     // iterate all instructions of the block in reverse order.
     // skip the first instruction because it is always a label
@@ -1595,7 +1595,7 @@ void LinearScan::sort_intervals_before_allocation() {
         sorted_list->at_put(sorted_idx++, cur_interval);
         sorted_from_max = cur_interval->from();
       } else {
-        // the asumption that the intervals are already sorted failed,
+        // the assumption that the intervals are already sorted failed,
         // so this interval must be sorted in manually
         int j;
         for (j = sorted_idx - 1; j >= 0 && cur_from < sorted_list->at(j)->from(); j--) {
@@ -1738,12 +1738,11 @@ Interval* LinearScan::interval_at_op_id(int reg_num, int op_id) {
 void LinearScan::resolve_collect_mappings(BlockBegin* from_block, BlockBegin* to_block, MoveResolver &move_resolver) {
   DEBUG_ONLY(move_resolver.check_empty());
 
-  const int size = live_set_size();
-  const ResourceBitMap live_at_edge = to_block->live_in();
-
   // visit all registers where the live_at_edge bit is set
-  for (int r = (int)live_at_edge.get_next_one_offset(0, size); r < size; r = (int)live_at_edge.get_next_one_offset(r + 1, size)) {
-    assert(r < num_virtual_regs(), "live information set for not exisiting interval");
+  const ResourceBitMap& live_at_edge = to_block->live_in();
+  auto visitor = [&](BitMap::idx_t index) {
+    int r = static_cast<int>(index);
+    assert(r < num_virtual_regs(), "live information set for not existing interval");
     assert(from_block->live_out().at(r) && to_block->live_in().at(r), "interval not live at this edge");
 
     Interval* from_interval = interval_at_block_end(from_block, r);
@@ -1753,7 +1752,8 @@ void LinearScan::resolve_collect_mappings(BlockBegin* from_block, BlockBegin* to
       // need to insert move instruction
       move_resolver.add_mapping(from_interval, to_interval);
     }
-  }
+  };
+  live_at_edge.iterate(visitor, 0, live_set_size());
 }
 
 
@@ -1913,10 +1913,11 @@ void LinearScan::resolve_exception_entry(BlockBegin* block, MoveResolver &move_r
   DEBUG_ONLY(move_resolver.check_empty());
 
   // visit all registers where the live_in bit is set
-  int size = live_set_size();
-  for (int r = (int)block->live_in().get_next_one_offset(0, size); r < size; r = (int)block->live_in().get_next_one_offset(r + 1, size)) {
+  auto resolver = [&](BitMap::idx_t index) {
+    int r = static_cast<int>(index);
     resolve_exception_entry(block, r, move_resolver);
-  }
+  };
+  block->live_in().iterate(resolver, 0, live_set_size());
 
   // the live_in bits are not set for phi functions of the xhandler entry, so iterate them separately
   for_each_phi_fun(block, phi,
@@ -1986,10 +1987,11 @@ void LinearScan::resolve_exception_edge(XHandler* handler, int throwing_op_id, M
 
   // visit all registers where the live_in bit is set
   BlockBegin* block = handler->entry_block();
-  int size = live_set_size();
-  for (int r = (int)block->live_in().get_next_one_offset(0, size); r < size; r = (int)block->live_in().get_next_one_offset(r + 1, size)) {
+  auto resolver = [&](BitMap::idx_t index) {
+    int r = static_cast<int>(index);
     resolve_exception_edge(handler, throwing_op_id, r, NULL, move_resolver);
-  }
+  };
+  block->live_in().iterate(resolver, 0, live_set_size());
 
   // the live_in bits are not set for phi functions of the xhandler entry, so iterate them separately
   for_each_phi_fun(block, phi,
@@ -2511,12 +2513,12 @@ void LinearScan::compute_oop_map(IntervalWalker* iw, const LIR_OpVisitState &vis
 // Allocate them with new so they are never destroyed (otherwise, a
 // forced exit could destroy these objects while they are still in
 // use).
-ConstantOopWriteValue* LinearScan::_oop_null_scope_value = new (ResourceObj::C_HEAP, mtCompiler) ConstantOopWriteValue(NULL);
-ConstantIntValue*      LinearScan::_int_m1_scope_value = new (ResourceObj::C_HEAP, mtCompiler) ConstantIntValue(-1);
-ConstantIntValue*      LinearScan::_int_0_scope_value =  new (ResourceObj::C_HEAP, mtCompiler) ConstantIntValue((jint)0);
-ConstantIntValue*      LinearScan::_int_1_scope_value =  new (ResourceObj::C_HEAP, mtCompiler) ConstantIntValue(1);
-ConstantIntValue*      LinearScan::_int_2_scope_value =  new (ResourceObj::C_HEAP, mtCompiler) ConstantIntValue(2);
-LocationValue*         _illegal_value = new (ResourceObj::C_HEAP, mtCompiler) LocationValue(Location());
+ConstantOopWriteValue* LinearScan::_oop_null_scope_value = new (mtCompiler) ConstantOopWriteValue(NULL);
+ConstantIntValue*      LinearScan::_int_m1_scope_value = new (mtCompiler) ConstantIntValue(-1);
+ConstantIntValue*      LinearScan::_int_0_scope_value =  new (mtCompiler) ConstantIntValue((jint)0);
+ConstantIntValue*      LinearScan::_int_1_scope_value =  new (mtCompiler) ConstantIntValue(1);
+ConstantIntValue*      LinearScan::_int_2_scope_value =  new (mtCompiler) ConstantIntValue(2);
+LocationValue*         _illegal_value = new (mtCompiler) LocationValue(Location());
 
 void LinearScan::init_compute_debug_info() {
   // cache for frequently used scope values
@@ -2829,8 +2831,8 @@ int LinearScan::append_scope_value(int op_id, Value value, GrowableArray<ScopeVa
     LIR_Opr opr = value->operand();
     Constant* con = value->as_Constant();
 
-    assert(con == NULL || opr->is_virtual() || opr->is_constant() || opr->is_illegal(), "asumption: Constant instructions have only constant operands (or illegal if constant is optimized away)");
-    assert(con != NULL || opr->is_virtual(), "asumption: non-Constant instructions have only virtual operands");
+    assert(con == NULL || opr->is_virtual() || opr->is_constant() || opr->is_illegal(), "assumption: Constant instructions have only constant operands (or illegal if constant is optimized away)");
+    assert(con != NULL || opr->is_virtual(), "assumption: non-Constant instructions have only virtual operands");
 
     if (con != NULL && !con->is_pinned() && !opr->is_constant()) {
       // Unpinned constants may have a virtual operand for a part of the lifetime
@@ -3131,6 +3133,9 @@ void LinearScan::do_linear_scan() {
     }
   }
 
+#ifndef RISCV
+  // Disable these optimizations on riscv temporarily, because it does not
+  // work when the comparison operands are bound to branches or cmoves.
   { TIME_LINEAR_SCAN(timer_optimize_lir);
 
     EdgeMoveOptimizer::optimize(ir()->code());
@@ -3138,6 +3143,7 @@ void LinearScan::do_linear_scan() {
     // check that cfg is still correct after optimizations
     ir()->verify();
   }
+#endif
 
   NOT_PRODUCT(print_lir(1, "Before Code Generation", false));
   NOT_PRODUCT(LinearScanStatistic::compute(this, _stat_final));
@@ -3462,10 +3468,11 @@ void LinearScan::verify_constants() {
 
   for (int i = 0; i < num_blocks; i++) {
     BlockBegin* block = block_at(i);
-    ResourceBitMap live_at_edge = block->live_in();
+    ResourceBitMap& live_at_edge = block->live_in();
 
     // visit all registers where the live_at_edge bit is set
-    for (int r = (int)live_at_edge.get_next_one_offset(0, size); r < size; r = (int)live_at_edge.get_next_one_offset(r + 1, size)) {
+    auto visitor = [&](BitMap::idx_t index) {
+      int r = static_cast<int>(index);
       TRACE_LINEAR_SCAN(4, tty->print("checking interval %d of block B%d", r, block->block_id()));
 
       Value value = gen()->instruction_for_vreg(r);
@@ -3473,8 +3480,9 @@ void LinearScan::verify_constants() {
       assert(value != NULL, "all intervals live across block boundaries must have Value");
       assert(value->operand()->is_register() && value->operand()->is_virtual(), "value must have virtual operand");
       assert(value->operand()->vreg_number() == r, "register number must match");
-      // TKR assert(value->as_Constant() == NULL || value->is_pinned(), "only pinned constants can be alive accross block boundaries");
-    }
+      // TKR assert(value->as_Constant() == NULL || value->is_pinned(), "only pinned constants can be alive across block boundaries");
+    };
+    live_at_edge.iterate(visitor, 0, size);
   }
 }
 
@@ -3998,7 +4006,7 @@ void MoveResolver::resolve_mappings() {
       Interval* to_interval = _mapping_to.at(i);
 
       if (save_to_process_move(from_interval, to_interval)) {
-        // this inverval can be processed because target is free
+        // this interval can be processed because target is free
         if (from_interval != NULL) {
           insert_move(from_interval, to_interval);
           unblock_registers(from_interval);
@@ -4125,8 +4133,10 @@ Range::Range(int from, int to, Range* next) :
 
 // initialize sentinel
 Range* Range::_end = NULL;
-void Range::initialize(Arena* arena) {
-  _end = new (arena) Range(max_jint, max_jint, NULL);
+void Range::initialize() {
+  assert(_end == nullptr, "Range initialized more than once");
+  alignas(Range) static uint8_t end_storage[sizeof(Range)];
+  _end = ::new(static_cast<void*>(end_storage)) Range(max_jint, max_jint, NULL);
 }
 
 int Range::intersects_at(Range* r2) const {
@@ -4172,9 +4182,11 @@ void Range::print(outputStream* out) const {
 
 // initialize sentinel
 Interval* Interval::_end = NULL;
-void Interval::initialize(Arena* arena) {
-  Range::initialize(arena);
-  _end = new (arena) Interval(-1);
+void Interval::initialize() {
+  Range::initialize();
+  assert(_end == nullptr, "Interval initialized more than once");
+  alignas(Interval) static uint8_t end_storage[sizeof(Interval)];
+  _end = ::new(static_cast<void*>(end_storage)) Interval(-1);
 }
 
 Interval::Interval(int reg_num) :
@@ -4248,7 +4260,7 @@ Interval* Interval::register_hint(bool search_split_child) const {
   }
 
   if (_register_hint != NULL) {
-    assert(_register_hint->is_split_parent(), "ony split parents are valid hint registers");
+    assert(_register_hint->is_split_parent(), "only split parents are valid hint registers");
 
     if (_register_hint->assigned_reg() >= 0 && _register_hint->assigned_reg() < LinearScan::nof_regs) {
       return _register_hint;
@@ -5161,7 +5173,7 @@ int LinearScanWalker::find_optimal_split_pos(Interval* it, int min_split_pos, in
       optimal_split_pos = max_split_pos;
 
     } else {
-      // seach optimal block boundary between min_split_pos and max_split_pos
+      // search optimal block boundary between min_split_pos and max_split_pos
       TRACE_LINEAR_SCAN(4, tty->print_cr("      moving split pos to optimal block boundary between block B%d and B%d", min_block->block_id(), max_block->block_id()));
 
       if (do_loop_optimization) {
@@ -5731,7 +5743,7 @@ void LinearScanWalker::alloc_locked_reg(Interval* cur) {
       split_when_partial_register_available(cur, split_pos);
     }
 
-    // perform splitting and spilling for all affected intervalls
+    // perform splitting and spilling for all affected intervals
     split_and_spill_intersecting_intervals(reg, regHi);
   }
 }
@@ -6243,7 +6255,7 @@ bool ControlFlowOptimizer::can_delete_block(BlockBegin* block) {
 
   assert(instructions->length() >= 2, "block must have label and branch");
   assert(instructions->at(0)->code() == lir_label, "first instruction must always be a label");
-  assert(instructions->last()->as_OpBranch() != NULL, "last instrcution must always be a branch");
+  assert(instructions->last()->as_OpBranch() != NULL, "last instruction must always be a branch");
   assert(instructions->last()->as_OpBranch()->cond() == lir_cond_always, "branch must be unconditional");
   assert(instructions->last()->as_OpBranch()->block() == block->sux_at(0), "branch target must be the successor");
 
@@ -6361,14 +6373,14 @@ void ControlFlowOptimizer::delete_unnecessary_jumps(BlockList* code) {
               // There might be a cmove inserted for profiling which depends on the same
               // compare. If we change the condition of the respective compare, we have
               // to take care of this cmove as well.
-              LIR_Op2* prev_cmove = NULL;
+              LIR_Op4* prev_cmove = NULL;
 
               for(int j = instructions->length() - 3; j >= 0 && prev_cmp == NULL; j--) {
                 prev_op = instructions->at(j);
                 // check for the cmove
                 if (prev_op->code() == lir_cmove) {
-                  assert(prev_op->as_Op2() != NULL, "cmove must be of type LIR_Op2");
-                  prev_cmove = (LIR_Op2*)prev_op;
+                  assert(prev_op->as_Op4() != NULL, "cmove must be of type LIR_Op4");
+                  prev_cmove = (LIR_Op4*)prev_op;
                   assert(prev_branch->cond() == prev_cmove->condition(), "should be the same");
                 }
                 if (prev_op->code() == lir_cmp) {
@@ -6424,7 +6436,7 @@ void ControlFlowOptimizer::delete_jumps_to_return(BlockList* code) {
       //
       // Note: the original block with only a return statement cannot be deleted completely
       //       because the predecessors might have other (conditional) jumps to this block
-      //       -> this may lead to unnecesary return instructions in the final code
+      //       -> this may lead to unnecessary return instructions in the final code
 
       assert(cur_last_op->info() == NULL, "return instructions do not have debug information");
       assert(block->number_of_sux() == 0 ||
@@ -6723,6 +6735,8 @@ void LinearScanStatistic::collect(LinearScan* allocator) {
         case lir_rem:
         case lir_sqrt:
         case lir_abs:
+        case lir_f2hf:
+        case lir_hf2f:
         case lir_log10:
         case lir_logic_and:
         case lir_logic_or:
@@ -6853,7 +6867,7 @@ void LinearScanTimers::end_method(LinearScan* allocator) {
 void LinearScanTimers::print(double total_time) {
   if (TimeLinearScan) {
     // correction value: sum of dummy-timer that only measures the time that
-    // is necesary to start and stop itself
+    // is necessary to start and stop itself
     double c = timer(timer_do_nothing)->seconds();
 
     for (int i = 0; i < number_of_timers; i++) {

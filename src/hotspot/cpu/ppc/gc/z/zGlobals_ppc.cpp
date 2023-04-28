@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, 2023, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2021 SAP SE. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -42,7 +42,7 @@
 // addressable heap address space are adjusted accordingly.
 //
 // The following memory schema shows an exemplary layout in which bit '45' is the highest addressable bit.
-// It is assumed that this virtual memroy address space layout is predominant on the power platform.
+// It is assumed that this virtual memory address space layout is predominant on the power platform.
 //
 // Standard Address Space & Pointer Layout
 // ---------------------------------------
@@ -107,7 +107,7 @@ static unsigned int probe_valid_max_address_bit(size_t init_bit, size_t min_bit)
   unsigned int max_valid_address_bit = 0;
   void* last_allocatable_address = nullptr;
 
-  const unsigned int page_size = os::vm_page_size();
+  const size_t page_size = os::vm_page_size();
 
   for (size_t i = init_bit; i >= min_bit; --i) {
     void* base_addr = (void*) (((unsigned long) 1U) << i);

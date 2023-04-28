@@ -62,11 +62,26 @@ public class TestCastMethods {
             makePair(FSPEC128, ISPEC128),
             makePair(FSPEC64, DSPEC128),
             makePair(FSPEC128, DSPEC256),
+            makePair(FSPEC128, ISPEC128),
+            makePair(FSPEC128, SSPEC64),
             makePair(DSPEC128, FSPEC64),
-            makePair(DSPEC256, FSPEC128)
+            makePair(DSPEC256, FSPEC128),
+            makePair(DSPEC128, ISPEC64),
+            makePair(BSPEC64, SSPEC64, true),
+            makePair(BSPEC64, SSPEC128, true),
+            makePair(BSPEC64, ISPEC128, true),
+            makePair(SSPEC64, ISPEC64, true),
+            makePair(SSPEC64, ISPEC128, true),
+            makePair(SSPEC64, LSPEC128, true),
+            makePair(ISPEC64, LSPEC128, true)
     );
 
     public static final List<VectorSpeciesPair> AVX2_CAST_TESTS = Stream.concat(AVX1_CAST_TESTS.stream(), Stream.of(
+            makePair(DSPEC256, ISPEC128),
+            makePair(DSPEC256, SSPEC64),
+            makePair(FSPEC256, ISPEC256),
+            makePair(FSPEC256, SSPEC128),
+            makePair(FSPEC256, BSPEC64),
             makePair(BSPEC128, SSPEC256),
             makePair(BSPEC64, ISPEC256),
             makePair(BSPEC64, LSPEC256),
@@ -82,7 +97,12 @@ public class TestCastMethods {
             makePair(LSPEC256, BSPEC64),
             makePair(LSPEC256, SSPEC64),
             makePair(LSPEC256, ISPEC128),
-            makePair(FSPEC256, ISPEC256)
+            makePair(BSPEC128, SSPEC256, true),
+            makePair(BSPEC64, ISPEC256, true),
+            makePair(BSPEC64, LSPEC256, true),
+            makePair(SSPEC128, ISPEC256, true),
+            makePair(SSPEC64, LSPEC256, true),
+            makePair(ISPEC128, LSPEC256, true)
     )).toList();
 
     public static final List<VectorSpeciesPair> AVX512_CAST_TESTS = Stream.concat(AVX2_CAST_TESTS.stream(), Stream.of(
@@ -102,14 +122,25 @@ public class TestCastMethods {
             makePair(LSPEC512, BSPEC64),
             makePair(LSPEC512, SSPEC128),
             makePair(LSPEC512, ISPEC256),
-            makePair(FSPEC512, ISPEC512),
             makePair(FSPEC256, DSPEC512),
-            makePair(DSPEC512, FSPEC256)
+            makePair(DSPEC512, FSPEC256),
+            makePair(DSPEC512, ISPEC256),
+            makePair(DSPEC512, SSPEC128),
+            makePair(DSPEC512, BSPEC64),
+            makePair(FSPEC512, ISPEC512),
+            makePair(FSPEC512, SSPEC256),
+            makePair(FSPEC512, BSPEC128),
+            makePair(BSPEC128, ISPEC512, true),
+            makePair(BSPEC64, LSPEC512, true),
+            makePair(SSPEC256, ISPEC512, true),
+            makePair(SSPEC128, LSPEC512, true),
+            makePair(ISPEC256, LSPEC512, true)
     )).toList();
 
     public static final List<VectorSpeciesPair> AVX512BW_CAST_TESTS = Stream.concat(AVX512_CAST_TESTS.stream(), Stream.of(
             makePair(BSPEC256, SSPEC512),
-            makePair(SSPEC512, BSPEC256)
+            makePair(SSPEC512, BSPEC256),
+            makePair(BSPEC256, SSPEC512, true)
     )).toList();
 
     public static final List<VectorSpeciesPair> AVX512DQ_CAST_TESTS = Stream.concat(AVX512_CAST_TESTS.stream(), Stream.of(

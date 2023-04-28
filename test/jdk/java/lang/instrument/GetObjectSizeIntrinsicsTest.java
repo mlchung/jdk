@@ -27,11 +27,11 @@
  * @summary Test for fInst.getObjectSize with 32-bit compressed oops
  * @library /test/lib
  *
- * @build sun.hotspot.WhiteBox
+ * @build jdk.test.whitebox.WhiteBox
  * @run build GetObjectSizeIntrinsicsTest
  * @run shell MakeJAR.sh basicAgent
  *
- * @run driver jdk.test.lib.helpers.ClassFileInstaller sun.hotspot.WhiteBox
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
  *
  * @run main/othervm -Xmx128m
  *                   -XX:+UnlockDiagnosticVMOptions -XX:+AbortVMOnCompilationFailure -XX:+WhiteBoxAPI -Xbootclasspath/a:.
@@ -55,11 +55,11 @@
  * @library /test/lib
  * @requires vm.bits == 64
  *
- * @build sun.hotspot.WhiteBox
+ * @build jdk.test.whitebox.WhiteBox
  * @run build GetObjectSizeIntrinsicsTest
  * @run shell MakeJAR.sh basicAgent
  *
- * @run driver jdk.test.lib.helpers.ClassFileInstaller sun.hotspot.WhiteBox
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
  *
  * @run main/othervm -Xmx4g
  *                   -XX:+UnlockDiagnosticVMOptions -XX:+AbortVMOnCompilationFailure -XX:+WhiteBoxAPI -Xbootclasspath/a:.
@@ -83,11 +83,11 @@
  * @library /test/lib
  * @requires vm.bits == 64
  *
- * @build sun.hotspot.WhiteBox
+ * @build jdk.test.whitebox.WhiteBox
  * @run build GetObjectSizeIntrinsicsTest
  * @run shell MakeJAR.sh basicAgent
  *
- * @run driver jdk.test.lib.helpers.ClassFileInstaller sun.hotspot.WhiteBox
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
  *
  * @run main/othervm -Xmx128m -XX:-UseCompressedOops
  *                   -XX:+UnlockDiagnosticVMOptions -XX:+AbortVMOnCompilationFailure -XX:+WhiteBoxAPI -Xbootclasspath/a:.
@@ -111,11 +111,11 @@
  * @library /test/lib
  * @requires vm.debug
  *
- * @build sun.hotspot.WhiteBox
+ * @build jdk.test.whitebox.WhiteBox
  * @run build GetObjectSizeIntrinsicsTest
  * @run shell MakeJAR.sh basicAgent
  *
- * @run driver jdk.test.lib.helpers.ClassFileInstaller sun.hotspot.WhiteBox
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
  *
  * @run main/othervm -Xmx128m
  *                   -XX:+UnlockDiagnosticVMOptions -XX:+AbortVMOnCompilationFailure -XX:+WhiteBoxAPI -Xbootclasspath/a:.
@@ -143,11 +143,11 @@
  * @requires vm.bits == 64
  * @requires vm.debug
  *
- * @build sun.hotspot.WhiteBox
+ * @build jdk.test.whitebox.WhiteBox
  * @run build GetObjectSizeIntrinsicsTest
  * @run shell MakeJAR.sh basicAgent
  *
- * @run driver jdk.test.lib.helpers.ClassFileInstaller sun.hotspot.WhiteBox
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
  *
  * @run main/othervm -Xmx4g
  *                   -XX:+UnlockDiagnosticVMOptions -XX:+AbortVMOnCompilationFailure -XX:+WhiteBoxAPI -Xbootclasspath/a:.
@@ -175,11 +175,11 @@
  * @requires vm.bits == 64
  * @requires vm.debug
  *
- * @build sun.hotspot.WhiteBox
+ * @build jdk.test.whitebox.WhiteBox
  * @run build GetObjectSizeIntrinsicsTest
  * @run shell MakeJAR.sh basicAgent
  *
- * @run driver jdk.test.lib.helpers.ClassFileInstaller sun.hotspot.WhiteBox
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
  *
  * @run main/othervm -Xmx128m -XX:-UseCompressedOops
  *                   -XX:+UnlockDiagnosticVMOptions -XX:+AbortVMOnCompilationFailure -XX:+WhiteBoxAPI -Xbootclasspath/a:.
@@ -207,11 +207,11 @@
  * @requires vm.bits == 64
  * @requires vm.debug
  *
- * @build sun.hotspot.WhiteBox
+ * @build jdk.test.whitebox.WhiteBox
  * @run build GetObjectSizeIntrinsicsTest
  * @run shell MakeJAR.sh basicAgent
  *
- * @run driver jdk.test.lib.helpers.ClassFileInstaller sun.hotspot.WhiteBox
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
  *
  * @run main/othervm -Xmx128m
  *                   -XX:+UnlockDiagnosticVMOptions -XX:+AbortVMOnCompilationFailure -XX:+WhiteBoxAPI -Xbootclasspath/a:.
@@ -239,11 +239,11 @@
  * @requires vm.bits == 64
  * @requires vm.debug
  *
- * @build sun.hotspot.WhiteBox
+ * @build jdk.test.whitebox.WhiteBox
  * @run build GetObjectSizeIntrinsicsTest
  * @run shell MakeJAR.sh basicAgent
  *
- * @run driver jdk.test.lib.helpers.ClassFileInstaller sun.hotspot.WhiteBox
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
  *
  * @run main/othervm -Xmx4g
  *                   -XX:+UnlockDiagnosticVMOptions -XX:+AbortVMOnCompilationFailure -XX:+WhiteBoxAPI -Xbootclasspath/a:.
@@ -272,27 +272,24 @@
  * @requires vm.debug
  * @requires os.maxMemory >= 10G
  *
- * @build sun.hotspot.WhiteBox
+ * @build jdk.test.whitebox.WhiteBox
  * @run build GetObjectSizeIntrinsicsTest
  * @run shell MakeJAR.sh basicAgent
  *
- * @run driver jdk.test.lib.helpers.ClassFileInstaller sun.hotspot.WhiteBox
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
  *
- * @run main/othervm -Xmx8g
+ * @run main/othervm/timeout=240 -Xmx8g
  *                   -XX:+UnlockDiagnosticVMOptions -XX:+AbortVMOnCompilationFailure -XX:+WhiteBoxAPI -Xbootclasspath/a:.
- *                   -XX:ObjectAlignmentInBytes=32
  *                   -Xint
  *                   -javaagent:basicAgent.jar GetObjectSizeIntrinsicsTest GetObjectSizeIntrinsicsTest large
  *
- * @run main/othervm -Xmx8g
+ * @run main/othervm/timeout=240 -Xmx8g
  *                   -XX:+UnlockDiagnosticVMOptions -XX:+AbortVMOnCompilationFailure -XX:+WhiteBoxAPI -Xbootclasspath/a:.
- *                   -XX:ObjectAlignmentInBytes=32
  *                   -Xbatch -XX:TieredStopAtLevel=1
  *                   -javaagent:basicAgent.jar GetObjectSizeIntrinsicsTest GetObjectSizeIntrinsicsTest large
  *
- * @run main/othervm -Xmx8g
+ * @run main/othervm/timeout=180 -Xmx8g
  *                   -XX:+UnlockDiagnosticVMOptions -XX:+AbortVMOnCompilationFailure -XX:+WhiteBoxAPI -Xbootclasspath/a:.
- *                   -XX:ObjectAlignmentInBytes=32
  *                   -Xbatch -XX:-TieredCompilation
  *                   -javaagent:basicAgent.jar GetObjectSizeIntrinsicsTest GetObjectSizeIntrinsicsTest large
  */
@@ -300,20 +297,21 @@
 import java.util.*;
 
 import jdk.test.lib.Platform;
-import sun.hotspot.WhiteBox;
+import jdk.test.whitebox.WhiteBox;
 
 public class GetObjectSizeIntrinsicsTest extends ASimpleInstrumentationTestCase {
 
     static final Boolean COMPRESSED_OOPS = WhiteBox.getWhiteBox().getBooleanVMFlag("UseCompressedOops");
     static final long REF_SIZE = (COMPRESSED_OOPS == null || COMPRESSED_OOPS == true) ? 4 : 8;
 
-    static final Long align = WhiteBox.getWhiteBox().getIntxVMFlag("ObjectAlignmentInBytes");
+    static final Long align = WhiteBox.getWhiteBox().getIntVMFlag("ObjectAlignmentInBytes");
     static final int OBJ_ALIGN = (align == null ? 8 : align.intValue());
 
     static final int SMALL_ARRAY_SIZE = 1024;
 
-    // With int[] arrays, this overflows 4G boundary
-    static final int LARGE_ARRAY_SIZE = 1024*1024*1024 + 1024;
+    // These should overflow 4G size boundary
+    static final int LARGE_INT_ARRAY_SIZE = 1024*1024*1024 + 1024;
+    static final int LARGE_OBJ_ARRAY_SIZE = (4096/(int)REF_SIZE)*1024*1024 + 1024;
 
     final String mode;
 
@@ -446,16 +444,16 @@ public class GetObjectSizeIntrinsicsTest extends ASimpleInstrumentationTestCase 
     }
 
     private void testSize_localLargeIntArray() {
-        int[] arr = new int[LARGE_ARRAY_SIZE];
-        long expected = roundUp(4L*LARGE_ARRAY_SIZE + 16, OBJ_ALIGN);
+        int[] arr = new int[LARGE_INT_ARRAY_SIZE];
+        long expected = roundUp(4L*LARGE_INT_ARRAY_SIZE + 16, OBJ_ALIGN);
         for (int c = 0; c < ITERS; c++) {
             assertEquals(expected, fInst.getObjectSize(arr));
         }
     }
 
     private void testSize_localLargeObjArray() {
-        Object[] arr = new Object[LARGE_ARRAY_SIZE];
-        long expected = roundUp(REF_SIZE*LARGE_ARRAY_SIZE + 16, OBJ_ALIGN);
+        Object[] arr = new Object[LARGE_OBJ_ARRAY_SIZE];
+        long expected = roundUp(REF_SIZE*LARGE_OBJ_ARRAY_SIZE + 16, OBJ_ALIGN);
         for (int c = 0; c < ITERS; c++) {
             assertEquals(expected, fInst.getObjectSize(arr));
         }

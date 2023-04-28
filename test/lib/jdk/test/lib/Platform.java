@@ -189,12 +189,29 @@ public class Platform {
         return vmVersion;
     }
 
+    public static boolean isMusl() {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("ldd", "--version");
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            BufferedReader b = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            String l = b.readLine();
+            if (l != null && l.contains("musl")) { return true; }
+        } catch(Exception e) {
+        }
+        return false;
+    }
+
     public static boolean isAArch64() {
         return isArch("aarch64");
     }
 
     public static boolean isARM() {
         return isArch("arm.*");
+    }
+
+    public static boolean isRISCV64() {
+        return isArch("riscv64");
     }
 
     public static boolean isPPC() {
@@ -276,6 +293,10 @@ public class Platform {
                 isHardened = true;
                 System.out.println("Target JDK is hardened. Some tests may be skipped.");
             } else if (line.indexOf("flags=0x20002(adhoc,linker-signed)") != -1 ) {
+                hardenedStatusConfirmed = true;
+                isHardened = false;
+                System.out.println("Target JDK is adhoc linker-signed, but not hardened.");
+            } else if (line.indexOf("flags=0x2(adhoc)") != -1 ) {
                 hardenedStatusConfirmed = true;
                 isHardened = false;
                 System.out.println("Target JDK is adhoc signed, but not hardened.");

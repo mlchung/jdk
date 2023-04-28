@@ -169,7 +169,7 @@ public class BasicTabbedPaneUI extends TabbedPaneUI implements SwingConstants {
     protected KeyStroke rightKey;
 
 
-// Transient variables (recalculated each time TabbedPane is layed out)
+// Transient variables (recalculated each time TabbedPane is laid out)
     /** Tab runs */
     protected int[] tabRuns = new int[10];
     /** Run count */
@@ -775,7 +775,7 @@ public class BasicTabbedPaneUI extends TabbedPaneUI implements SwingConstants {
      * Returns the baseline for the specified tab.
      *
      * @param tab index of tab to get baseline for
-     * @exception IndexOutOfBoundsException if index is out of range
+     * @throws IndexOutOfBoundsException if index is out of range
      *            (index &lt; 0 || index &gt;= tab count)
      * @return baseline or a value &lt; 0 indicating there is no reasonable
      *                  baseline
@@ -2879,7 +2879,7 @@ public class BasicTabbedPaneUI extends TabbedPaneUI implements SwingConstants {
 
             // In order to allow programs to use a single component
             // as the display for multiple tabs, we will not change
-            // the visible compnent if the currently selected tab
+            // the visible component if the currently selected tab
             // has a null component.  This is a bit dicey, as we don't
             // explicitly state we support this in the spec, but since
             // programs are now depending on this, we're making it work.
@@ -3421,7 +3421,7 @@ public class BasicTabbedPaneUI extends TabbedPaneUI implements SwingConstants {
 
             // In order to allow programs to use a single component
             // as the display for multiple tabs, we will not change
-            // the visible compnent if the currently selected tab
+            // the visible component if the currently selected tab
             // has a null component.  This is a bit dicey, as we don't
             // explicitly state we support this in the spec, but since
             // programs are now depending on this, we're making it work.
@@ -4099,7 +4099,7 @@ public class BasicTabbedPaneUI extends TabbedPaneUI implements SwingConstants {
 
             setFocusIndex(tabPane.getSelectedIndex(), false);
 
-            if (scrollableTabLayoutEnabled()) {
+            if (tabPane.getLayout() instanceof TabbedPaneScrollLayout) {
                 ensureCurrentLayout();
                 int index = tabPane.getSelectedIndex();
                 if (index < rects.length && index != -1) {

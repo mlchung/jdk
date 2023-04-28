@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2022, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -67,10 +67,12 @@ inline G1FullGCCompactionPoint* G1DetermineCompactionQueueClosure::next_compacti
 }
 
 inline void G1DetermineCompactionQueueClosure::add_to_compaction_queue(HeapRegion* hr) {
-  hr->set_compaction_top(hr->bottom());
+  _collector->set_compaction_top(hr, hr->bottom());
+  _collector->set_has_compaction_targets();
+
   G1FullGCCompactionPoint* cp = next_compaction_point();
   if (!cp->is_initialized()) {
-    cp->initialize(hr, true);
+    cp->initialize(hr);
   }
   // Add region to the compaction queue.
   cp->add(hr);
@@ -87,14 +89,9 @@ inline bool G1DetermineCompactionQueueClosure::do_heap_region(HeapRegion* hr) {
       bool is_empty = !_collector->mark_bitmap()->is_marked(obj);
       if (is_empty) {
         free_pinned_region<true>(hr);
+      } else {
+        _collector->set_has_humongous();
       }
-    } else if (hr->is_open_archive()) {
-      bool is_empty = _collector->live_words(hr->hrm_index()) == 0;
-      if (is_empty) {
-        free_pinned_region<false>(hr);
-      }
-    } else if (hr->is_closed_archive()) {
-      // nothing to do with closed archive region
     } else {
       assert(MarkSweepDeadRatio > 0,
              "only skip compaction for other regions when MarkSweepDeadRatio > 0");
@@ -110,10 +107,12 @@ inline bool G1DetermineCompactionQueueClosure::do_heap_region(HeapRegion* hr) {
 }
 
 inline size_t G1SerialRePrepareClosure::apply(oop obj) {
-  // We only re-prepare objects forwarded within the current region, so
-  // skip objects that are already forwarded to another region.
-  if (obj->is_forwarded() && !_current->is_in(obj->forwardee())) {
-    return obj->size();
+  if (obj->is_forwarded()) {
+    // We skip objects compiled into the first region or
+    // into regions not part of the serial compaction point.
+    if (cast_from_oop<HeapWord*>(obj->forwardee()) < _dense_prefix_top) {
+      return obj->size();
+    }
   }
 
   // Get size and forward.

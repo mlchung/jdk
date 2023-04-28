@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -57,7 +57,7 @@ size_t G1AllocRegion::fill_up_remaining_space(HeapRegion* alloc_region) {
 
   // Other threads might still be trying to allocate using a CAS out
   // of the region we are trying to retire, as they can do so without
-  // holding the lock. So, we first have to make sure that noone else
+  // holding the lock. So, we first have to make sure that no one else
   // can allocate out of it by doing a maximal allocation. Even if our
   // CAS attempt fails a few times, we'll succeed sooner or later
   // given that failed CAS attempts mean that the region is getting
@@ -65,7 +65,7 @@ size_t G1AllocRegion::fill_up_remaining_space(HeapRegion* alloc_region) {
   size_t free_word_size = alloc_region->free() / HeapWordSize;
 
   // This is the minimum free chunk we can turn into a dummy
-  // object. If the free space falls below this, then noone can
+  // object. If the free space falls below this, then no one can
   // allocate in this region anyway (all allocation requests will be
   // of a size larger than this) so we won't have to perform the dummy
   // allocation.
@@ -363,32 +363,4 @@ size_t G1GCAllocRegion::retire(bool fill_up) {
     _stats->add_region_end_waste(end_waste / HeapWordSize);
   }
   return end_waste;
-}
-
-HeapRegion* OldGCAllocRegion::release() {
-  HeapRegion* cur = get();
-  if (cur != NULL) {
-    // Determine how far we are from the next card boundary. If it is smaller than
-    // the minimum object size we can allocate into, expand into the next card.
-    HeapWord* top = cur->top();
-    HeapWord* aligned_top = align_up(top, BOTConstants::card_size());
-
-    size_t to_allocate_words = pointer_delta(aligned_top, top, HeapWordSize);
-
-    if (to_allocate_words != 0) {
-      // We are not at a card boundary. Fill up, possibly into the next, taking the
-      // end of the region and the minimum object size into account.
-      to_allocate_words = MIN2(pointer_delta(cur->end(), cur->top(), HeapWordSize),
-                               MAX2(to_allocate_words, G1CollectedHeap::min_fill_size()));
-
-      // Skip allocation if there is not enough space to allocate even the smallest
-      // possible object. In this case this region will not be retained, so the
-      // original problem cannot occur.
-      if (to_allocate_words >= G1CollectedHeap::min_fill_size()) {
-        HeapWord* dummy = attempt_allocation(to_allocate_words);
-        cur->fill_with_dummy_object(dummy, to_allocate_words);
-      }
-    }
-  }
-  return G1AllocRegion::release();
 }

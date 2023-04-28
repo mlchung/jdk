@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -198,6 +198,9 @@
                                                                             \
   product(bool, AlwaysPreTouch, false,                                      \
           "Force all freshly committed pages to be pre-touched")            \
+                                                                            \
+  product(bool, AlwaysPreTouchStacks, false, DIAGNOSTIC,                    \
+          "Force java thread stacks to be fully pre-touched")               \
                                                                             \
   product_pd(size_t, PreTouchParallelChunkSize,                             \
           "Per-thread chunk size for parallel memory pre-touch.")           \
@@ -503,10 +506,6 @@
           "How far ahead to prefetch scan area (<= 0 means off)")           \
           range(-1, max_jint)                                               \
                                                                             \
-  product(intx, PrefetchFieldsAhead, -1,                                    \
-          "How many fields ahead to prefetch in oop scan (<= 0 means off)") \
-          range(-1, max_jint)                                               \
-                                                                            \
   product(bool, VerifyDuringStartup, false, DIAGNOSTIC,                     \
           "Verify memory system before executing any Java code "            \
           "during VM initialization")                                       \
@@ -541,9 +540,6 @@
           "threads, heap, symbol_table, string_table, codecache, "          \
           "dictionary, classloader_data_graph, metaspace, jni_handles, "    \
           "codecache_oops, resolved_method_table, stringdedup")             \
-                                                                            \
-  product(bool, GCParallelVerificationEnabled, true, DIAGNOSTIC,            \
-          "Enable parallel memory system verification")                     \
                                                                             \
   product(bool, DeferInitialCardMark, false, DIAGNOSTIC,                    \
           "When +ReduceInitialCardMarks, explicitly defer any that "        \

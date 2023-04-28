@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -339,6 +339,10 @@ public class LinkedHashMap<K,V>
      * Constructs an empty insertion-ordered {@code LinkedHashMap} instance
      * with the specified initial capacity and load factor.
      *
+     * @apiNote
+     * To create a {@code LinkedHashMap} with an initial capacity that accommodates
+     * an expected number of mappings, use {@link #newLinkedHashMap(int) newLinkedHashMap}.
+     *
      * @param  initialCapacity the initial capacity
      * @param  loadFactor      the load factor
      * @throws IllegalArgumentException if the initial capacity is negative
@@ -352,6 +356,10 @@ public class LinkedHashMap<K,V>
     /**
      * Constructs an empty insertion-ordered {@code LinkedHashMap} instance
      * with the specified initial capacity and a default load factor (0.75).
+     *
+     * @apiNote
+     * To create a {@code LinkedHashMap} with an initial capacity that accommodates
+     * an expected number of mappings, use {@link #newLinkedHashMap(int) newLinkedHashMap}.
      *
      * @param  initialCapacity the initial capacity
      * @throws IllegalArgumentException if the initial capacity is negative
@@ -497,7 +505,7 @@ public class LinkedHashMap<K,V>
      *
      * @param    eldest The least recently inserted entry in the map, or if
      *           this is an access-ordered map, the least recently accessed
-     *           entry.  This is the entry that will be removed it this
+     *           entry.  This is the entry that will be removed if this
      *           method returns {@code true}.  If the map was empty prior
      *           to the {@code put} or {@code putAll} invocation resulting
      *           in this invocation, this will be the entry that was just
@@ -788,5 +796,24 @@ public class LinkedHashMap<K,V>
         public final Map.Entry<K,V> next() { return nextNode(); }
     }
 
+    /**
+     * Creates a new, empty, insertion-ordered LinkedHashMap suitable for the expected number of mappings.
+     * The returned map uses the default load factor of 0.75, and its initial capacity is
+     * generally large enough so that the expected number of mappings can be added
+     * without resizing the map.
+     *
+     * @param numMappings the expected number of mappings
+     * @param <K>         the type of keys maintained by the new map
+     * @param <V>         the type of mapped values
+     * @return the newly created map
+     * @throws IllegalArgumentException if numMappings is negative
+     * @since 19
+     */
+    public static <K, V> LinkedHashMap<K, V> newLinkedHashMap(int numMappings) {
+        if (numMappings < 0) {
+            throw new IllegalArgumentException("Negative number of mappings: " + numMappings);
+        }
+        return new LinkedHashMap<>(HashMap.calculateHashMapCapacity(numMappings));
+    }
 
 }

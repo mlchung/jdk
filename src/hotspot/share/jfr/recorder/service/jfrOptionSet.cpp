@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,7 +33,7 @@
 #include "memory/allocation.inline.hpp"
 #include "memory/resourceArea.hpp"
 #include "runtime/java.hpp"
-#include "runtime/thread.inline.hpp"
+#include "runtime/javaThread.hpp"
 #include "services/diagnosticArgument.hpp"
 #include "services/diagnosticFramework.hpp"
 #include "utilities/growableArray.hpp"
@@ -165,6 +165,7 @@ const char* const default_sample_threads = "true";
 const char* const default_stack_depth = "64";
 const char* const default_retransform = "true";
 const char* const default_old_object_queue_size = "256";
+const char* const default_preserve_repository = "false";
 DEBUG_ONLY(const char* const default_sample_protection = "false";)
 
 // statics
@@ -254,6 +255,13 @@ static DCmdArgument<bool> _dcmd_retransform(
   true,
   default_retransform);
 
+static DCmdArgument<bool> _dcmd_preserve_repository(
+  "preserve-repository",
+  "Preserve disk repository after JVM exit",
+  "BOOLEAN",
+  false,
+  default_preserve_repository);
+
 static DCmdParser _parser;
 
 static void register_parser_options() {
@@ -268,6 +276,7 @@ static void register_parser_options() {
   _parser.add_dcmd_option(&_dcmd_sample_threads);
   _parser.add_dcmd_option(&_dcmd_retransform);
   _parser.add_dcmd_option(&_dcmd_old_object_queue_size);
+  _parser.add_dcmd_option(&_dcmd_preserve_repository);
   DEBUG_ONLY(_parser.add_dcmd_option(&_dcmd_sample_protection);)
 }
 
@@ -379,6 +388,9 @@ bool JfrOptionSet::configure(TRAPS) {
   configure._sample_threads.set_is_set(_dcmd_sample_threads.is_set());
   configure._sample_threads.set_value(_dcmd_sample_threads.value());
 
+  configure._preserve_repository.set_is_set(_dcmd_preserve_repository.is_set());
+  configure._preserve_repository.set_value(_dcmd_preserve_repository.value());
+
   configure.set_verbose(false);
   configure.execute(DCmd_Source_Internal, THREAD);
 
@@ -467,7 +479,7 @@ static void log_adjustments(MemoryArg& original_memory_size, julong new_memory_s
 
 // All "triangular" options are explicitly set
 // check that they are congruent and not causing
-// an ambiguous situtation
+// an ambiguous situation
 template <typename MemoryArg, typename NumberArg>
 static bool check_for_ambiguity(MemoryArg& memory_size, MemoryArg& global_buffer_size, NumberArg& num_global_buffers) {
   assert(memory_size.is_set(), "invariant");
@@ -488,7 +500,7 @@ static bool check_for_ambiguity(MemoryArg& memory_size, MemoryArg& global_buffer
       num_global_buffers.name(),
       memory_size.name());
     log_error(arguments) (
-      "Try to remove one of the involved options or make sure they are unambigous");
+      "Try to remove one of the involved options or make sure they are unambiguous");
     return false;
   }
   return true;
@@ -769,7 +781,7 @@ bool JfrOptionSet::parse_start_flight_recording_option(const JavaVMOption** opti
   const size_t value_length = strlen(value);
 
   if (start_flight_recording_options_array == NULL) {
-    start_flight_recording_options_array = new (ResourceObj::C_HEAP, mtTracing) GrowableArray<const char*>(8, mtTracing);
+    start_flight_recording_options_array = new (mtTracing) GrowableArray<const char*>(8, mtTracing);
   }
   assert(start_flight_recording_options_array != NULL, "invariant");
   char* const startup_value = NEW_C_HEAP_ARRAY(char, value_length + 1, mtTracing);

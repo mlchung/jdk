@@ -33,6 +33,7 @@
 #include "gc/shared/ageTable.hpp"
 #include "gc/shared/copyFailedInfo.hpp"
 #include "gc/shared/partialArrayTaskStepper.hpp"
+#include "gc/shared/preservedMarks.hpp"
 #include "gc/shared/stringdedup/stringDedup.hpp"
 #include "gc/shared/taskqueue.hpp"
 #include "memory/allocation.hpp"
@@ -91,7 +92,8 @@ class G1ParScanThreadState : public CHeapObj<mtGC> {
 
   G1CardTable* ct() { return _ct; }
 
-  size_t _num_optional_regions;
+  // Maximum number of optional regions at start of gc.
+  size_t _max_num_optional_regions;
   G1OopStarChunkedList* _oops_into_optional_regions;
 
   G1NUMA* _numa;
@@ -114,7 +116,7 @@ public:
                        G1RedirtyCardsQueueSet* rdcqs,
                        PreservedMarks* preserved_marks,
                        uint worker_id,
-                       uint n_workers,
+                       uint num_workers,
                        size_t young_cset_length,
                        size_t optional_cset_length,
                        G1EvacFailureRegions* evac_failure_regions);
@@ -152,7 +154,7 @@ public:
 
   // Pass locally gathered statistics to global state. Returns the total number of
   // HeapWords copied.
-  size_t flush(size_t* surviving_young_words);
+  size_t flush_stats(size_t* surviving_young_words, uint num_workers);
 
 private:
   void do_partial_array(PartialArrayScanTask task);
@@ -229,30 +231,28 @@ public:
 
 class G1ParScanThreadStateSet : public StackObj {
   G1CollectedHeap* _g1h;
-  G1RedirtyCardsQueueSet* _rdcqs;
-  PreservedMarksSet* _preserved_marks_set;
+  G1RedirtyCardsQueueSet _rdcqs;
+  PreservedMarksSet _preserved_marks_set;
   G1ParScanThreadState** _states;
   size_t* _surviving_young_words_total;
   size_t _young_cset_length;
   size_t _optional_cset_length;
-  uint _n_workers;
+  uint _num_workers;
   bool _flushed;
   G1EvacFailureRegions* _evac_failure_regions;
 
  public:
   G1ParScanThreadStateSet(G1CollectedHeap* g1h,
-                          G1RedirtyCardsQueueSet* rdcqs,
-                          PreservedMarksSet* preserved_marks_set,
-                          uint n_workers,
+                          uint num_workers,
                           size_t young_cset_length,
                           size_t optional_cset_length,
                           G1EvacFailureRegions* evac_failure_regions);
   ~G1ParScanThreadStateSet();
 
-  G1RedirtyCardsQueueSet* rdcqs() { return _rdcqs; }
-  PreservedMarksSet* preserved_marks_set() { return _preserved_marks_set; }
+  G1RedirtyCardsQueueSet* rdcqs() { return &_rdcqs; }
+  PreservedMarksSet* preserved_marks_set() { return &_preserved_marks_set; }
 
-  void flush();
+  void flush_stats();
   void record_unused_optional_region(HeapRegion* hr);
 
   G1ParScanThreadState* state_for_worker(uint worker_id);

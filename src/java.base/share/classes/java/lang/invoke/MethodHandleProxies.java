@@ -154,7 +154,8 @@ public class MethodHandleProxies {
     // entry points, must be covered by hand-written or automatically
     // generated adapter classes.
     //
-    @SuppressWarnings("removal")
+    @SuppressWarnings({"removal",
+                       "doclint:reference"}) // cross-module links
     @CallerSensitive(CallerSensitive.Option.PACKAGE_ACCESS_PERMISSION)
     public static <T> T asInterfaceInstance(final Class<T> intfc, final MethodHandle target) {
         if (!intfc.isInterface() || !Modifier.isPublic(intfc.getModifiers()))

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1995, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1995, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -44,6 +44,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectInputStream.GetField;
 import java.io.ObjectOutputStream;
 import java.io.ObjectOutputStream.PutField;
+import java.io.Serializable;
 import java.lang.annotation.Native;
 import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
@@ -54,10 +55,10 @@ import java.util.Arrays;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
 
-import jdk.internal.misc.VM;
-
 import jdk.internal.access.JavaNetInetAddressAccess;
 import jdk.internal.access.SharedSecrets;
+import jdk.internal.misc.Blocker;
+import jdk.internal.misc.VM;
 import jdk.internal.vm.annotation.Stable;
 import sun.net.ResolverProviderConfiguration;
 import sun.security.action.*;
@@ -215,6 +216,14 @@ import static java.net.spi.InetAddressResolver.LookupPolicy.IPV6_FIRST;
  * </dd>
  * </dl>
  *
+ * @spec https://www.rfc-editor.org/info/rfc1918
+ *      RFC 1918: Address Allocation for Private Internets
+ * @spec https://www.rfc-editor.org/info/rfc2365
+ *      RFC 2365: Administratively Scoped IP Multicast
+ * @spec https://www.rfc-editor.org/info/rfc2373
+ *      RFC 2373: IP Version 6 Addressing Architecture
+ * @spec https://www.rfc-editor.org/info/rfc790
+ *      RFC 790: Assigned numbers
  * @author  Chris Warth
  * @see     java.net.InetAddress#getByAddress(byte[])
  * @see     java.net.InetAddress#getByAddress(java.lang.String, byte[])
@@ -222,8 +231,9 @@ import static java.net.spi.InetAddressResolver.LookupPolicy.IPV6_FIRST;
  * @see     java.net.InetAddress#getByName(java.lang.String)
  * @see     java.net.InetAddress#getLocalHost()
  * @since 1.0
+ * @sealedGraph
  */
-public class InetAddress implements java.io.Serializable {
+public sealed class InetAddress implements Serializable permits Inet4Address, Inet6Address {
 
     /**
      * Specify the address family: Internet Protocol, Version 4
@@ -410,6 +420,9 @@ public class InetAddress implements java.io.Serializable {
 
     // Native method to check if IPv4 is available
     private static native boolean isIPv4Available();
+
+    // Native method to check if IPv6 is available
+    private static native boolean isIPv6Supported();
 
     /**
      * The {@code RuntimePermission("inetAddressResolverProvider")} is
@@ -968,6 +981,7 @@ public class InetAddress implements java.io.Serializable {
     // in cache when the result is obtained
     private static final class NameServiceAddresses implements Addresses {
         private final String host;
+        private final ReentrantLock lookupLock = new ReentrantLock();
 
         NameServiceAddresses(String host) {
             this.host = host;
@@ -978,7 +992,8 @@ public class InetAddress implements java.io.Serializable {
             Addresses addresses;
             // only one thread is doing lookup to name service
             // for particular host at any time.
-            synchronized (this) {
+            lookupLock.lock();
+            try {
                 // re-check that we are still us + re-install us if slot empty
                 addresses = cache.putIfAbsent(host, this);
                 if (addresses == null) {
@@ -1026,6 +1041,8 @@ public class InetAddress implements java.io.Serializable {
                     return inetAddresses;
                 }
                 // else addresses != this
+            } finally {
+                lookupLock.unlock();
             }
             // delegate to different addresses when we are already replaced
             // but outside of synchronized block to avoid any chance of dead-locking
@@ -1045,16 +1062,28 @@ public class InetAddress implements java.io.Serializable {
                 throws UnknownHostException {
             Objects.requireNonNull(host);
             Objects.requireNonNull(policy);
-            return Arrays.stream(impl.lookupAllHostAddr(host, policy));
+            validate(host);
+            InetAddress[] addrs;
+            long comp = Blocker.begin();
+            try {
+                addrs = impl.lookupAllHostAddr(host, policy);
+            } finally {
+                Blocker.end(comp);
+            }
+            return Arrays.stream(addrs);
         }
 
-        public String lookupByAddress(byte[] addr)
-                throws UnknownHostException {
+        public String lookupByAddress(byte[] addr) throws UnknownHostException {
             Objects.requireNonNull(addr);
             if (addr.length != Inet4Address.INADDRSZ && addr.length != Inet6Address.INADDRSZ) {
                 throw new IllegalArgumentException("Invalid address length");
             }
-            return impl.getHostByAddr(addr);
+            long comp = Blocker.begin();
+            try {
+                return impl.getHostByAddr(addr);
+            } finally {
+                Blocker.end(comp);
+            }
         }
     }
 
@@ -1235,7 +1264,11 @@ public class InetAddress implements java.io.Serializable {
         private byte [] createAddressByteArray(String addrStr) {
             byte[] addrArray;
             // check if IPV4 address - most likely
-            addrArray = IPAddressUtil.textToNumericFormatV4(addrStr);
+            try {
+                addrArray = IPAddressUtil.validateNumericFormatV4(addrStr);
+            } catch (IllegalArgumentException iae) {
+                return null;
+            }
             if (addrArray == null) {
                 addrArray = IPAddressUtil.textToNumericFormatV6(addrStr);
             }
@@ -1269,7 +1302,8 @@ public class InetAddress implements java.io.Serializable {
 
     static {
         // create the impl
-        impl = InetAddressImplFactory.create();
+        impl = isIPv6Supported() ?
+                new Inet6AddressImpl() : new Inet4AddressImpl();
 
         // impl must be initialized before calling this method
         PLATFORM_LOOKUP_POLICY = initializePlatformLookupPolicy();
@@ -1383,6 +1417,9 @@ public class InetAddress implements java.io.Serializable {
      *               for a global IPv6 address.
      * @throws     SecurityException if a security manager exists
      *             and its checkConnect method doesn't allow the operation
+     *
+     * @spec https://www.rfc-editor.org/info/rfc2373 RFC 2373: IP Version 6 Addressing Architecture
+     * @spec https://www.rfc-editor.org/info/rfc3330 RFC 3330: Special-Use IPv4 Addresses
      */
     public static InetAddress getByName(String host)
         throws UnknownHostException {
@@ -1426,6 +1463,8 @@ public class InetAddress implements java.io.Serializable {
      * @throws     SecurityException  if a security manager exists and its
      *               {@code checkConnect} method doesn't allow the operation.
      *
+     * @spec https://www.rfc-editor.org/info/rfc2373 RFC 2373: IP Version 6 Addressing Architecture
+     * @spec https://www.rfc-editor.org/info/rfc3330 RFC 3330: Special-Use IPv4 Addresses
      * @see SecurityManager#checkConnect
      */
     public static InetAddress[] getAllByName(String host)
@@ -1437,6 +1476,7 @@ public class InetAddress implements java.io.Serializable {
             return ret;
         }
 
+        validate(host);
         boolean ipv6Expected = false;
         if (host.charAt(0) == '[') {
             // This is supposed to be an IPv6 literal
@@ -1444,39 +1484,50 @@ public class InetAddress implements java.io.Serializable {
                 host = host.substring(1, host.length() -1);
                 ipv6Expected = true;
             } else {
-                // This was supposed to be a IPv6 address, but it's not!
-                throw new UnknownHostException(host + ": invalid IPv6 address");
+                // This was supposed to be a IPv6 literal, but it's not
+                throw invalidIPv6LiteralException(host, false);
             }
         }
 
-        // if host is an IP address, we won't do further lookup
-        if (Character.digit(host.charAt(0), 16) != -1
+        // Check and try to parse host string as an IP address literal
+        if (IPAddressUtil.digit(host.charAt(0), 16) != -1
             || (host.charAt(0) == ':')) {
             byte[] addr = null;
             int numericZone = -1;
             String ifname = null;
-            // see if it is IPv4 address
-            addr = IPAddressUtil.textToNumericFormatV4(host);
+
+            if (!ipv6Expected) {
+                // check if it is IPv4 address only if host is not wrapped in '[]'
+                try {
+                    addr = IPAddressUtil.validateNumericFormatV4(host);
+                } catch (IllegalArgumentException iae) {
+                    var uhe = new UnknownHostException(host);
+                    uhe.initCause(iae);
+                    throw uhe;
+                }
+            }
             if (addr == null) {
-                // This is supposed to be an IPv6 literal
-                // Check if a numeric or string zone id is present
+                // Try to parse host string as an IPv6 literal
+                // Check if a numeric or string zone id is present first
                 int pos;
-                if ((pos=host.indexOf ('%')) != -1) {
-                    numericZone = checkNumericZone (host);
+                if ((pos = host.indexOf('%')) != -1) {
+                    numericZone = checkNumericZone(host);
                     if (numericZone == -1) { /* remainder of string must be an ifname */
-                        ifname = host.substring (pos+1);
+                        ifname = host.substring(pos + 1);
                     }
                 }
-                if ((addr = IPAddressUtil.textToNumericFormatV6(host)) == null && host.contains(":")) {
-                    throw new UnknownHostException(host + ": invalid IPv6 address");
+                if ((addr = IPAddressUtil.textToNumericFormatV6(host)) == null &&
+                        (host.contains(":") || ipv6Expected)) {
+                    throw invalidIPv6LiteralException(host, ipv6Expected);
                 }
-            } else if (ipv6Expected) {
-                // Means an IPv4 literal between brackets!
-                throw new UnknownHostException("["+host+"]");
             }
-            InetAddress[] ret = new InetAddress[1];
             if(addr != null) {
+                InetAddress[] ret = new InetAddress[1];
                 if (addr.length == Inet4Address.INADDRSZ) {
+                    if (numericZone != -1 || ifname != null) {
+                        // IPv4-mapped address must not contain zone-id
+                        throw new UnknownHostException(host + ": invalid IPv4-mapped address");
+                    }
                     ret[0] = new Inet4Address(null, addr);
                 } else {
                     if (ifname != null) {
@@ -1488,10 +1539,16 @@ public class InetAddress implements java.io.Serializable {
                 return ret;
             }
         } else if (ipv6Expected) {
-            // We were expecting an IPv6 Literal, but got something else
-            throw new UnknownHostException("["+host+"]");
+            // We were expecting an IPv6 Literal since host string starts
+            // and ends with square brackets, but we got something else.
+            throw invalidIPv6LiteralException(host, true);
         }
         return getAllByName0(host, true, true);
+    }
+
+    private static UnknownHostException invalidIPv6LiteralException(String host, boolean wrapInBrackets) {
+        String hostString = wrapInBrackets ? "[" + host + "]" : host;
+        return new UnknownHostException(hostString + ": invalid IPv6 address literal");
     }
 
     /**
@@ -1521,22 +1578,23 @@ public class InetAddress implements java.io.Serializable {
         int percent = s.indexOf ('%');
         int slen = s.length();
         int digit, zone=0;
+        int multmax = Integer.MAX_VALUE / 10; // for int overflow detection
         if (percent == -1) {
             return -1;
         }
         for (int i=percent+1; i<slen; i++) {
             char c = s.charAt(i);
-            if (c == ']') {
-                if (i == percent+1) {
-                    /* empty per-cent field */
-                    return -1;
-                }
-                break;
+            if ((digit = IPAddressUtil.parseAsciiDigit(c, 10)) < 0) {
+                return -1;
             }
-            if ((digit = Character.digit (c, 10)) < 0) {
+            if (zone > multmax) {
                 return -1;
             }
             zone = (zone * 10) + digit;
+            if (zone < 0) {
+                return -1;
+            }
+
         }
         return zone;
     }
@@ -1769,16 +1827,6 @@ public class InetAddress implements java.io.Serializable {
         return impl.anyLocalAddress();
     }
 
-    /**
-     * Initializes an empty InetAddress.
-     */
-    @java.io.Serial
-    private void readObjectNoData () {
-        if (getClass().getClassLoader() != null) {
-            throw new SecurityException ("invalid address type");
-        }
-    }
-
     private static final jdk.internal.misc.Unsafe UNSAFE
             = jdk.internal.misc.Unsafe.getUnsafe();
     private static final long FIELDS_OFFSET
@@ -1794,9 +1842,6 @@ public class InetAddress implements java.io.Serializable {
     @java.io.Serial
     private void readObject (ObjectInputStream s) throws
                          IOException, ClassNotFoundException {
-        if (getClass().getClassLoader() != null) {
-            throw new SecurityException ("invalid address type");
-        }
         GetField gf = s.readFields();
         String host = (String)gf.get("hostName", null);
         int address = gf.get("address", 0);
@@ -1830,28 +1875,17 @@ public class InetAddress implements java.io.Serializable {
      * @throws IOException if an I/O error occurs
      */
     @java.io.Serial
-    private void writeObject (ObjectOutputStream s) throws
-                        IOException {
-        if (getClass().getClassLoader() != null) {
-            throw new SecurityException ("invalid address type");
-        }
+    private void writeObject (ObjectOutputStream s) throws IOException {
         PutField pf = s.putFields();
         pf.put("hostName", holder().getHostName());
         pf.put("address", holder().getAddress());
         pf.put("family", holder().getFamily());
         s.writeFields();
     }
-}
 
-/*
- * Simple factory to create the impl
- */
-class InetAddressImplFactory {
-
-    static InetAddressImpl create() {
-        return isIPv6Supported() ?
-                new Inet6AddressImpl() : new Inet4AddressImpl();
+    private static void validate(String host) throws UnknownHostException {
+        if (host.indexOf(0) != -1) {
+            throw new UnknownHostException("NUL character not allowed in hostname");
+        }
     }
-
-    static native boolean isIPv6Supported();
 }

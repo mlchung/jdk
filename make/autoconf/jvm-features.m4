@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2011, 2022, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2011, 2023, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -247,8 +247,14 @@ AC_DEFUN_ONCE([JVM_FEATURES_CHECK_CDS],
 AC_DEFUN_ONCE([JVM_FEATURES_CHECK_DTRACE],
 [
   JVM_FEATURES_CHECK_AVAILABILITY(dtrace, [
-    AC_MSG_CHECKING([for dtrace tool])
-    if test "x$DTRACE" != "x" && test -x "$DTRACE"; then
+    AC_MSG_CHECKING([for dtrace tool and platform support])
+    if test "x$OPENJDK_TARGET_CPU_ARCH" = "xppc"; then
+      AC_MSG_RESULT([no, $OPENJDK_TARGET_CPU_ARCH])
+      AVAILABLE=false
+    elif test "x$OPENJDK_TARGET_CPU_ARCH" = "xs390"; then
+      AC_MSG_RESULT([no, $OPENJDK_TARGET_CPU_ARCH])
+      AVAILABLE=false
+    elif test "x$DTRACE" != "x" && test -x "$DTRACE"; then
       AC_MSG_RESULT([$DTRACE])
     else
       AC_MSG_RESULT([no])
@@ -265,22 +271,6 @@ AC_DEFUN_ONCE([JVM_FEATURES_CHECK_DTRACE],
 ])
 
 ###############################################################################
-# Check if the feature 'jfr' is available on this platform.
-#
-AC_DEFUN_ONCE([JVM_FEATURES_CHECK_JFR],
-[
-  JVM_FEATURES_CHECK_AVAILABILITY(jfr, [
-    AC_MSG_CHECKING([if platform is supported by JFR])
-    if test "x$OPENJDK_TARGET_OS" = xaix; then
-      AC_MSG_RESULT([no, $OPENJDK_TARGET_OS-$OPENJDK_TARGET_CPU])
-      AVAILABLE=false
-    else
-      AC_MSG_RESULT([yes])
-    fi
-  ])
-])
-
-###############################################################################
 # Check if the feature 'jvmci' is available on this platform.
 #
 AC_DEFUN_ONCE([JVM_FEATURES_CHECK_JVMCI],
@@ -290,6 +280,8 @@ AC_DEFUN_ONCE([JVM_FEATURES_CHECK_JVMCI],
     if test "x$OPENJDK_TARGET_CPU" = "xx86_64"; then
       AC_MSG_RESULT([yes])
     elif test "x$OPENJDK_TARGET_CPU" = "xaarch64"; then
+      AC_MSG_RESULT([yes])
+    elif test "x$OPENJDK_TARGET_CPU" = "xriscv64"; then
       AC_MSG_RESULT([yes])
     else
       AC_MSG_RESULT([no, $OPENJDK_TARGET_CPU])
@@ -307,7 +299,8 @@ AC_DEFUN_ONCE([JVM_FEATURES_CHECK_SHENANDOAHGC],
     AC_MSG_CHECKING([if platform is supported by Shenandoah])
     if test "x$OPENJDK_TARGET_CPU_ARCH" = "xx86" || \
         test "x$OPENJDK_TARGET_CPU" = "xaarch64" || \
-        test "x$OPENJDK_TARGET_CPU" = "xppc64le"; then
+        test "x$OPENJDK_TARGET_CPU" = "xppc64le" || \
+        test "x$OPENJDK_TARGET_CPU" = "xriscv64"; then
       AC_MSG_RESULT([yes])
     else
       AC_MSG_RESULT([no, $OPENJDK_TARGET_CPU])
@@ -357,7 +350,8 @@ AC_DEFUN_ONCE([JVM_FEATURES_CHECK_ZGC],
         AC_MSG_RESULT([no, $OPENJDK_TARGET_OS-$OPENJDK_TARGET_CPU])
         AVAILABLE=false
       fi
-    elif test "x$OPENJDK_TARGET_CPU" = "xppc64le"; then
+    elif test "x$OPENJDK_TARGET_CPU" = "xppc64le" || \
+        test "x$OPENJDK_TARGET_CPU" = "xriscv64"; then
       if test "x$OPENJDK_TARGET_OS" = "xlinux"; then
         AC_MSG_RESULT([yes])
       else
@@ -399,18 +393,11 @@ AC_DEFUN_ONCE([JVM_FEATURES_PREPARE_PLATFORM],
 
   JVM_FEATURES_CHECK_CDS
   JVM_FEATURES_CHECK_DTRACE
-  JVM_FEATURES_CHECK_JFR
   JVM_FEATURES_CHECK_JVMCI
   JVM_FEATURES_CHECK_SHENANDOAHGC
   JVM_FEATURES_CHECK_STATIC_BUILD
   JVM_FEATURES_CHECK_ZGC
 
-  # Filter out features by default for all variants on certain platforms.
-  # Make sure to just add to JVM_FEATURES_PLATFORM_FILTER, since it could
-  # have a value already from custom extensions.
-  if test "x$OPENJDK_TARGET_OS" = xaix; then
-    JVM_FEATURES_PLATFORM_FILTER="$JVM_FEATURES_PLATFORM_FILTER jfr"
-  fi
 ])
 
 ###############################################################################
@@ -431,7 +418,7 @@ AC_DEFUN([JVM_FEATURES_PREPARE_VARIANT],
   elif test "x$variant" = "xcore"; then
     JVM_FEATURES_VARIANT_UNAVAILABLE="cds minimal zero"
   elif test "x$variant" = "xzero"; then
-    JVM_FEATURES_VARIANT_UNAVAILABLE="cds compiler1 compiler2 \
+    JVM_FEATURES_VARIANT_UNAVAILABLE="compiler1 compiler2 \
         jvmci minimal zgc"
   else
     JVM_FEATURES_VARIANT_UNAVAILABLE="minimal zero"
