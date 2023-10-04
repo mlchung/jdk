@@ -42,6 +42,7 @@
 #include "runtime/javaThread.hpp"
 #include "runtime/keepStackGCProcessed.hpp"
 #include "runtime/stackWatermarkSet.hpp"
+#include "runtime/safepointVerifiers.hpp"
 #include "runtime/vframe.inline.hpp"
 #include "utilities/formatBuffer.hpp"
 #include "utilities/globalDefinitions.hpp"
@@ -86,6 +87,7 @@ JavaFrameStream::JavaFrameStream(JavaThread* thread, jint mode, Handle cont_scop
       ? vframeStream(thread, cont_scope)
       : vframeStream(cont(), cont_scope)) {
   _need_method_info = StackWalk::need_method_info(mode);
+  _use_backtrace = StackWalk::use_backtrace(mode);
 }
 
 LiveFrameStream::LiveFrameStream(JavaThread* thread, RegisterMap* rm, Handle cont_scope, Handle cont)
@@ -143,6 +145,169 @@ BaseFrameStream* BaseFrameStream::from_current(JavaThread* thread, jlong magic,
   return stream;
 }
 
+RawFrameStream::RawFrameStream(JavaThread* thread, jint mode, RegisterMap* rm, Handle cont_scope, Handle cont)
+  : BaseFrameStream(thread, cont), _cont_scope(cont_scope), _map(rm) {
+  _need_method_info = StackWalk::need_method_info(mode);
+  _use_backtrace = StackWalk::use_backtrace(mode);
+  _frame = thread->last_frame();
+  _decode_offset = 0;
+  _method = nullptr;
+  _bci = 0;
+  _cont_entry = thread->last_continuation();
+
+  if (!thread->has_last_Java_frame()) {
+    _mode = at_end_mode;
+  } else {
+    next();
+  }
+}
+
+void RawFrameStream::next() {
+  _method = nullptr;
+  _bci = 0;
+
+  do {
+
+
+    // Compiled java method case.
+    if (_decode_offset != 0) {
+      DebugInfoReadStream stream(_nm, _decode_offset);
+      _decode_offset = stream.read_int();
+      _method = (Method*)_nm->metadata_at(stream.read_int());
+      _bci = stream.read_bci();
+      log_debug(stackwalk)("  compiled method %s bci %d", _method->external_name(), _bci);
+    } else {
+      if (_frame.is_first_frame()) {
+        _mode = at_end_mode;
+        break;
+      }
+
+      if (Continuation::is_continuation_enterSpecial(_frame)) {
+        assert(_cont_entry == Continuation::get_continuation_entry_for_entry_frame(thread(), _frame), "");
+        if (!ShowCarrierFrames && _cont_entry->is_virtual_thread()) {
+          break;
+        }
+        _cont_entry = _cont_entry->parent();
+      }
+
+      address pc = _frame.pc();
+      if (_frame.is_interpreted_frame()) {
+        address bcp;
+        if (!_map->in_cont()) {
+          bcp = _frame.interpreter_frame_bcp();
+          _method = _frame.interpreter_frame_method();
+        } else {
+          bcp = _map->stack_chunk()->interpreter_frame_bcp(_frame);
+          _method = _map->stack_chunk()->interpreter_frame_method(_frame);
+        }
+        _bci =  _method->bci_from(bcp);
+        _frame = _frame.sender(_map);
+        _mode = interpreted_mode;
+        log_debug(stackwalk)("  interpreted method %s bci %d", _method->external_name(), _bci);
+      } else {
+        _mode = compiled_mode;
+
+        CodeBlob* cb = _frame.cb();
+        // HMMM QQQ might be nice to have frame return nm as null if cb is non-null
+        // but non nmethod
+        _frame = _frame.sender(_map);
+        if (cb == nullptr || !cb->is_compiled()) {
+          continue;
+        }
+        _nm = cb->as_compiled_method();
+        assert(_nm->method() != nullptr, "must be");
+        if (_nm->method()->is_native()) {
+          _method = _nm->method();
+          _bci = 0;   // native bci?
+        } else {
+          PcDesc* pd = _nm->pc_desc_at(pc);
+          _decode_offset = pd->scope_decode_offset();
+
+          log_debug(stackwalk)("  compiled method decoded offset %d", _decode_offset);
+          // if decode_offset is not equal to 0, it will execute the
+          // "compiled java method case" at the beginning of the loop.
+          continue;
+        }
+      }
+    }
+  } while (_method == nullptr);
+}
+
+
+void RawFrameStream::fill_frame(int index, objArrayHandle  frames_array,
+                                const methodHandle& method, TRAPS) {
+  if (_need_method_info) {
+    HandleMark hm(THREAD);
+    Handle stackFrame(THREAD, frames_array->obj_at(index));
+    fill_stackframe(stackFrame, method, CHECK);
+  } else {
+    HandleMark hm(THREAD);
+    Handle stackFrame(THREAD, frames_array->obj_at(index));
+    java_lang_ClassFrameInfo::set_classOrMemberName(stackFrame(), method->method_holder()->java_mirror());
+    java_lang_ClassFrameInfo::init_flags(stackFrame, method);
+  }
+}
+
+class BackTraceBuilder: public StackObj {
+ private:
+  Handle          _backtrace;
+  typeArrayOop    _methods;
+  typeArrayOop    _bcis;
+  objArrayOop     _mirrors;
+  typeArrayOop    _names; // Needed to insulate method name against redefinition.
+  int             _index;
+  // NoSafepointVerifier _nsv;
+
+ public:
+ void init_backtrace(Thread* thread, Handle backtrace) {
+    _backtrace = backtrace;
+    if (_backtrace.not_null()) {
+      _methods = java_lang_BackTrace::methods(backtrace());
+      _bcis = java_lang_BackTrace::bcis(backtrace());
+      _mirrors = java_lang_BackTrace::classes(backtrace());
+      _names = java_lang_BackTrace::names(backtrace());
+      _index = 0;
+    }
+ }
+
+
+  BackTraceBuilder() {}
+  BackTraceBuilder(Handle backtrace, TRAPS) {
+    init_backtrace(THREAD, backtrace);
+  }
+
+  inline void push(Method* method, int bci, TRAPS) {
+    // Smear the -1 bci to 0 since the array only holds unsigned
+    // shorts.  The later line number lookup would just smear the -1
+    // to a 0 even if it could be recorded.
+    if (bci == SynchronizationEntryBCI) bci = 0;
+
+    assert (_index < 32, "out-of-bound");
+
+    _methods->ushort_at_put(_index, method->orig_method_idnum());
+    _bcis->int_at_put(_index, Backtrace::merge_bci_and_version(bci, method->constants()->version()));
+
+    // Note:this doesn't leak symbols because the mirror in the backtrace keeps the
+    // klass owning the symbols alive so their refcounts aren't decremented.
+    Symbol* name = method->name();
+    _names->symbol_at_put(_index, name);
+
+    // We need to save the mirrors in the backtrace to keep the class
+    // from being unloaded while we still have this stack trace.
+    assert(method->method_holder()->java_mirror() != nullptr, "never push null for mirror");
+    _mirrors->obj_at_put(_index, method->method_holder()->java_mirror());
+
+    _index++;
+  }
+
+  void init_names(TRAPS) {
+    // PauseNoSafepointVerifier pnsv(&_nsv);
+    java_lang_BackTrace::init_names(_backtrace, CHECK);
+    _names = java_lang_BackTrace::names(_backtrace());
+  }
+};
+
+
 // Unpacks one or more frames into user-supplied buffers.
 // Updates the end index, and returns the number of unpacked frames.
 // Always start with the existing vfst.method and bci.
@@ -172,11 +337,48 @@ int StackWalk::fill_in_frames(jint mode, BaseFrameStream& stream,
   assert(buffer_size <= frames_array->length(), "oob");
 
   int frames_decoded = 0;
-  for (; !stream.at_end(); stream.next()) {
+  bool use_backtrace = StackWalk::use_backtrace(mode);
+  int bt_index = 0;
+  bool end_batch = false;
+  for (; !end_batch && !stream.at_end();) {
+    HandleMark hm(THREAD);
+
+    // begin filling in one chunk
+    int index = end_index;
+    oop bt = use_backtrace ? frames_array->obj_at(index) : nullptr;
+    int size = use_backtrace ? 32 : 1;
+    bt_index = 0;
+    Handle backtrace(THREAD, bt);
+    if (backtrace.not_null()) {
+      log_debug(stackwalk)("fill_in_frames advance to backtrace chunk %d", index);
+      java_lang_BackTrace::init_names(backtrace, CHECK_0);
+    }
+    BackTraceBuilder btb(backtrace, CHECK_0);
+    for (; bt_index < size && !stream.at_end(); stream.next()) {
+
     if (stream.continuation() != nullptr && stream.continuation() != stream.reg_map()->cont()) {
       // The code in StackStreamFactory.java has failed to set the continuation because frameBuffer.isAtBottom()
       // returns false if the end of a continuation falls precisely at the end of the batch.
       // By breaking here, we're signalling the Java code to set the continuation to the parent.
+
+      LogTarget(Debug, stackwalk) lt;
+      if (lt.is_enabled()) {
+        ResourceMark rm(THREAD);
+        LogStream ls(lt);
+        if (stream.continuation() != nullptr) {
+          ls.print("cont_scope: ");
+          stream.continuation()->print_on(&ls);
+        }
+        ls.print("reg_map cont: ");
+        if (stream.reg_map()->cont() != nullptr) {
+        stream.reg_map()->cont()->print_on(&ls);
+        } else {
+          ls.print("null");
+        }
+        ls.cr();
+      }
+
+      end_batch = true;
       break;
     }
     assert(stream.continuation() == nullptr || stream.continuation() == stream.reg_map()->cont(), "");
@@ -191,28 +393,54 @@ int StackWalk::fill_in_frames(jint mode, BaseFrameStream& stream,
         log_debug(stackwalk)("  skip hidden method: %s", stream.method()->external_name());
 
         // End a batch on continuation bottom to let the Java side to set the continuation to its parent and continue
-        if (stream.continuation() != nullptr && method->intrinsic_id() == vmIntrinsics::_Continuation_enter) break;
+        if (stream.continuation() != nullptr && method->intrinsic_id() == vmIntrinsics::_Continuation_enter) {
+          end_batch = true;
+          break;
+        }
         continue;
       }
     }
 
-    int index = end_index++;
-    log_debug(stackwalk)("  frame %d: %s bci %d", index, stream.method()->external_name(), stream.bci());
-    stream.fill_frame(index, frames_array, methodHandle(THREAD, method), CHECK_0);
+    if (use_backtrace) {
+      log_debug(stackwalk)("  frame %d: chunk %d at %d %s bci %d", frames_decoded, index, bt_index, stream.method()->external_name(), stream.bci());
+      // java_lang_BackTrace::push(backtrace, bt_index, methodHandle(THREAD, method), stream.bci(), CHECK_0);
+      btb.push(method, stream.bci(), CHECK_0);
+      if (bt_index == 31) {
+        end_index++;
+      }
+    } else {
+      log_debug(stackwalk)("  frame %d: %s bci %d", index, stream.method()->external_name(), stream.bci());
+      stream.fill_frame(index, frames_array, methodHandle(THREAD, method), CHECK_0);
+      end_index++;
+    }
+    bt_index++;
     frames_decoded++;
 
+
     // End a batch on continuation bottom to let the Java side to set the continuation to its parent and continue
-    if (stream.continuation() != nullptr && method->intrinsic_id() == vmIntrinsics::_Continuation_enter) break;
+    if (stream.continuation() != nullptr && method->intrinsic_id() == vmIntrinsics::_Continuation_enter) {
+      end_batch = true;
+      break;
+    }
+    if (end_index >= buffer_size) {
+      end_batch = true;
+      break;
+    }
+    }
 
-    if (end_index >= buffer_size)  break;
+    // set nframes in this chunk before filling in the next chunk
+    if (use_backtrace && bt_index > 0) {
+      log_debug(stackwalk)("set backtrace %d nframes %d ", index, bt_index);
+      java_lang_BackTrace::set_numFrames(backtrace(), bt_index);
+    }
   }
-  log_debug(stackwalk)("fill_in_frames returns %d at_end=%d", frames_decoded, stream.at_end());
 
+  log_debug(stackwalk)("fill_in_frames returns %d end_index=%d at_end=%d", frames_decoded, end_index, stream.at_end());
   return frames_decoded;
 }
 
 // Fill in the LiveStackFrameInfo at the given index in frames_array
-void LiveFrameStream::fill_frame(int index, objArrayHandle  frames_array,
+void LiveFrameStream::fill_frame(int index, objArrayHandle frames_array,
                                  const methodHandle& method, TRAPS) {
   HandleMark hm(THREAD);
   Handle stackFrame(THREAD, frames_array->obj_at(index));
@@ -220,7 +448,7 @@ void LiveFrameStream::fill_frame(int index, objArrayHandle  frames_array,
 }
 
 // Fill in the StackFrameInfo at the given index in frames_array
-void JavaFrameStream::fill_frame(int index, objArrayHandle  frames_array,
+void JavaFrameStream::fill_frame(int index, objArrayHandle frames_array,
                                  const methodHandle& method, TRAPS) {
   if (_need_method_info) {
     HandleMark hm(THREAD);
@@ -229,7 +457,8 @@ void JavaFrameStream::fill_frame(int index, objArrayHandle  frames_array,
   } else {
     HandleMark hm(THREAD);
     Handle stackFrame(THREAD, frames_array->obj_at(index));
-    java_lang_ClassFrameInfo::init_class(stackFrame, method);
+    java_lang_ClassFrameInfo::set_classOrMemberName(stackFrame(), method->method_holder()->java_mirror());
+    java_lang_ClassFrameInfo::init_flags(stackFrame, method);
   }
 }
 
@@ -419,7 +648,13 @@ oop StackWalk::walk(Handle stackStream, jint mode, int skip_frames, Handle cont_
     return fetchFirstBatch(stream, stackStream, mode, skip_frames, buffer_size,
                            start_index, frames_array, THREAD);
   } else {
-    JavaFrameStream stream(jt, mode, cont_scope, cont);
+    // JavaFrameStream stream(jt, mode, cont_scope, cont);
+    RegisterMap regMap = cont.is_null() ? RegisterMap(jt,
+                                                      RegisterMap::UpdateMap::skip,
+                                                      RegisterMap::ProcessFrames::skip,
+                                                      RegisterMap::WalkContinuation::include)
+                                        : RegisterMap(cont(), RegisterMap::UpdateMap::include);
+    RawFrameStream stream(jt, mode, &regMap, cont_scope, cont);
     return fetchFirstBatch(stream, stackStream, mode, skip_frames, buffer_size,
                            start_index, frames_array, THREAD);
   }
@@ -574,3 +809,4 @@ void StackWalk::setContinuation(Handle stackStream, jlong magic, objArrayHandle 
 
   existing_stream->set_continuation(cont);
 }
+

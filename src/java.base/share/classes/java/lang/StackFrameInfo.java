@@ -35,11 +35,14 @@ import java.lang.reflect.Modifier;
  * without StackWalker.Option#DROP_METHOD_INFO.
  */
 class StackFrameInfo extends ClassFrameInfo {
-    private String name;
-    private Object type;          // String or MethodType
-    private int bci;              // set by VM to >= 0
+    String name;
+    Object type;          // String or MethodType
+    int bci;              // set by VM to >= 0
     private ContinuationScope contScope;
-    private volatile StackTraceElement ste;
+    volatile StackTraceElement ste;
+
+    // VM injected field
+    // short version;
 
     /*
      * Construct an empty StackFrameInfo object that will be filled by the VM

@@ -28,6 +28,7 @@ import jdk.internal.reflect.CallerSensitive;
 
 import java.lang.invoke.MethodType;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -539,8 +540,13 @@ public final class StackWalker {
         // traversal is expected to resume.
 
         Objects.requireNonNull(function);
-        return StackStreamFactory.makeStackTraverser(this, function)
-                                 .walk();
+        if (estimateDepth == 0) {
+            return StackStreamFactory.makeStackTraverser(this, function)
+                                     .walk();
+        } else {
+            return StackStreamFactory.makeBackTraceTraverser(this, function)
+                                     .walk();
+        }
     }
 
     /**
@@ -563,6 +569,25 @@ public final class StackWalker {
             s.forEach(action);
             return null;
         }).walk();
+    }
+
+    /**
+     * Returns the stack frames
+     * @param depth the depth of the stack frames collected
+     * @return List of stack frames
+     */
+    @CallerSensitive
+    public List<StackFrame> toList(int depth) {
+        return StackStreamFactory.makeBackTraceTraverser(this, null).toList(depth);
+    }
+
+    /**
+     * Returns snapshot
+     * @return Snapshot of stack frames
+     */
+    @CallerSensitive
+    public Object snapshot() {
+        return StackStreamFactory.makeBackTraceTraverser(this, null).snapshot();
     }
 
     /**

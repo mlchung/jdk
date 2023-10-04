@@ -58,6 +58,7 @@ JVM_DumpClassListToFile
 JVM_DumpDynamicArchive
 JVM_DumpThreads
 JVM_ExpandStackFrameInfo
+JVM_FillBackTraceElements
 JVM_FillInStackTrace
 JVM_FindClassFromCaller
 JVM_FindClassFromClass

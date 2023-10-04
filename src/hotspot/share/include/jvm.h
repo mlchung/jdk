@@ -245,6 +245,7 @@ JVM_GetExtendedNPEMessage(JNIEnv *env, jthrowable throwable);
  */
 enum {
   JVM_STACKWALK_CLASS_INFO_ONLY            = 0x2,
+  JVM_STACKWALK_BACKTRACE                  = 0x4,
   JVM_STACKWALK_SHOW_HIDDEN_FRAMES         = 0x20,
   JVM_STACKWALK_FILL_LIVE_STACK_FRAMES     = 0x100
 };
@@ -264,6 +265,12 @@ JVM_MoreStackWalk(JNIEnv *env, jobject stackStream, jint mode, jlong anchor,
 
 JNIEXPORT void JNICALL
 JVM_SetStackWalkContinuation(JNIEnv *env, jobject stackStream, jlong anchor, jobjectArray frames, jobject cont);
+
+/*
+ * java.lang.BackTraceChunk
+ */
+JNIEXPORT void JNICALL
+JVM_FillBackTraceElements(JNIEnv *env, jobject backtrace, jclass cls, jobjectArray elements, jint depth);
 
 /*
  * java.lang.Thread
