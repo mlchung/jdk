@@ -50,6 +50,8 @@ import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.LambdaForm.BasicType;
+import java.lang.invoke.InfoFromMemberName.ResolvedMemberInfo;
+import java.lang.invoke.InfoFromMemberName.SymbolicReferenceInfo;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Member;
@@ -3704,6 +3706,67 @@ return mh1;
         /**
          * Cracks a <a href="MethodHandleInfo.html#directmh">direct method handle</a>
          * created by this lookup object or a similar one.
+         * The returned {@code MethodHandleInfo} represents the symbolic reference
+         * of the resolved member.
+         *
+         * Security and access checks are performed to ensure that this lookup object
+         * is capable of reproducing the target method handle.
+         * This means that the cracking may fail if target is a direct method handle
+         * but was created by an unrelated lookup object.
+         * This can happen if the method handle is <a href="MethodHandles.Lookup.html#callsens">caller sensitive</a>
+         * and was created by a lookup object for a different class.
+         *
+         * @param target a direct method handle to crack into symbolic reference components
+         * @return a symbolic reference which can be used to reconstruct this method handle from this lookup object
+         * @throws    SecurityException if a security manager is present and it
+         *                              <a href="MethodHandles.Lookup.html#secmgr">refuses access</a>
+         * @throws IllegalArgumentException if the target is not a direct method handle or if access checking fails
+         * @throws    NullPointerException if the target is {@code null}
+         * @see MethodHandleInfo
+         * @see #revealDirectSymbolicReference(MethodHandle)
+         * @since 1.8
+         */
+        public MethodHandleInfo revealDirect(MethodHandle target) {
+            if (!target.isCrackable()) {
+                throw newIllegalArgumentException("not a direct method handle");
+            }
+            MemberName member = target.internalMemberName();
+            Class<?> defc = member.getDeclaringClass();
+            Class<?> refc = member.getSymbolicReference();
+            byte refKind = member.getReferenceKind();
+            assert(MethodHandleNatives.refKindIsValid(refKind));
+            if (refKind == REF_invokeSpecial && !target.isInvokeSpecial())
+                // Devirtualized method invocation is usually formally virtual.
+                // To avoid creating extra MemberName objects for this common case,
+                // we encode this extra degree of freedom using MH.isInvokeSpecial.
+                refKind = REF_invokeVirtual;
+            if (refKind == REF_invokeVirtual && defc.isInterface())
+                // Symbolic reference is through interface but resolves to Object method (toString, etc.)
+                refKind = REF_invokeInterface;
+            // Check SM permissions and member access before cracking.
+            try {
+                // TODO: should this use MemberName::getReferenceClass instead of defc?
+                checkAccess(refKind, refc, member);
+                checkSecurityManager(refc, member);
+            } catch (IllegalAccessException ex) {
+                throw new IllegalArgumentException(ex);
+            }
+            if (allowedModes != TRUSTED && member.isCallerSensitive()) {
+                Class<?> callerClass = target.internalCallerClass();
+                if ((lookupModes() & ORIGINAL) == 0 || callerClass != lookupClass())
+                    throw new IllegalArgumentException("method handle is caller sensitive: "+callerClass);
+            }
+            // Produce the handle to the results.
+            return new ResolvedMemberInfo(this, member, refKind);
+        }
+
+        /**
+         * Cracks a <a href="MethodHandleInfo.html#directmh">direct method handle</a>
+         * created by this lookup object or a similar one.
+         * The {@linkplain MethodHandleInfo#getDeclaringClass() class} in the returned
+         * {@code MethodHandleInfo} is the referenced class used to look up the
+         * given direct method handle.
+         *
          * Security and access checks are performed to ensure that this lookup object
          * is capable of reproducing the target method handle.
          * This means that the cracking may fail if target is a direct method handle
@@ -3717,14 +3780,19 @@ return mh1;
          * @throws IllegalArgumentException if the target is not a direct method handle or if access checking fails
          * @throws    NullPointerException if the target is {@code null}
          * @see MethodHandleInfo
-         * @since 1.8
+         * @since 21
          */
-        public MethodHandleInfo revealDirect(MethodHandle target) {
+        public MethodHandleInfo revealDirectSymbolicReference(MethodHandle target) {
             if (!target.isCrackable()) {
                 throw newIllegalArgumentException("not a direct method handle");
             }
+
             MemberName member = target.internalMemberName();
-            Class<?> defc = member.getDeclaringClass();
+            Class<?> refc = member.getSymbolicReference();
+            if (refc == null) {
+                System.out.println(member);
+                throw new InternalError(member.toString());
+            }
             byte refKind = member.getReferenceKind();
             assert(MethodHandleNatives.refKindIsValid(refKind));
             if (refKind == REF_invokeSpecial && !target.isInvokeSpecial())
@@ -3732,13 +3800,13 @@ return mh1;
                 // To avoid creating extra MemberName objects for this common case,
                 // we encode this extra degree of freedom using MH.isInvokeSpecial.
                 refKind = REF_invokeVirtual;
-            if (refKind == REF_invokeVirtual && defc.isInterface())
+            if (refKind == REF_invokeVirtual && member.getDeclaringClass().isInterface())
                 // Symbolic reference is through interface but resolves to Object method (toString, etc.)
                 refKind = REF_invokeInterface;
             // Check SM permissions and member access before cracking.
             try {
-                checkAccess(refKind, defc, member);
-                checkSecurityManager(defc, member);
+                checkAccess(refKind, refc, member);
+                checkSecurityManager(refc, member);
             } catch (IllegalAccessException ex) {
                 throw new IllegalArgumentException(ex);
             }
@@ -3748,7 +3816,7 @@ return mh1;
                     throw new IllegalArgumentException("method handle is caller sensitive: "+callerClass);
             }
             // Produce the handle to the results.
-            return new InfoFromMemberName(this, member, refKind);
+            return new SymbolicReferenceInfo(this, member, refKind);
         }
 
         /// Helper methods, all package-private.

@@ -436,8 +436,14 @@ import static jdk.internal.org.objectweb.asm.Opcodes.*;
         mv.visitLdcInsn(factoryType.returnType().getName().replace('.', '/'));
         mv.visitLdcInsn(interfaceMethodName);
         mv.visitLdcInsn(interfaceMethodType.toMethodDescriptorString());
-        mv.visitLdcInsn(implInfo.getReferenceKind());
-        mv.visitLdcInsn(implInfo.getDeclaringClass().getName().replace('.', '/'));
+
+        // SerializedLambda::readResolve expects resolved method
+        var minfo = caller.revealDirect(implementation);
+//        if (implInfo.getReferenceKind() != minfo.getReferenceKind()) {
+//            System.out.println("writeReplace: " + caller.revealDirectSymbolicReference(implementation) + " revealDirect " + minfo);
+//        }
+        mv.visitLdcInsn(minfo.getReferenceKind());
+        mv.visitLdcInsn(minfo.getDeclaringClass().getName().replace('.', '/'));
         mv.visitLdcInsn(implInfo.getName());
         mv.visitLdcInsn(implInfo.getMethodType().toMethodDescriptorString());
         mv.visitLdcInsn(dynamicMethodType.toMethodDescriptorString());

@@ -68,6 +68,7 @@ import static java.lang.invoke.MethodHandleStatics.newInternalError;
 
 /*non-public*/
 final class MemberName implements Member, Cloneable {
+    private Class<?> refc;
     private Class<?> clazz;       // class in which the member is defined
     private String   name;        // may be null if not yet materialized
     private Object   type;        // may be null if not yet materialized
@@ -82,6 +83,11 @@ final class MemberName implements Member, Cloneable {
     public Class<?> getDeclaringClass() {
         return clazz;
     }
+
+    /** Return the symbolic reference that will resolve back to this member.
+     *  In the case of a bare name and type, the symbolic reference will be null.
+     */
+    public Class<?> getSymbolicReference() { return refc; }
 
     /** Utility method producing the class loader of the declaring class. */
     public ClassLoader getClassLoader() {
@@ -284,8 +290,14 @@ final class MemberName implements Member, Cloneable {
                     // Looking up an interface method, can get (e.g.) Object.hashCode
                     assert (refKind == REF_invokeVirtual || refKind == REF_invokeSpecial) : this;
                 }
-                case REF_invokeVirtual, REF_newInvokeSpecial -> {
+                case REF_invokeVirtual -> {
                     // Looked up a virtual, can get (e.g.) final String.hashCode.
+                    // Lookup up a virtual, can get a default method
+                    assert (refKind == REF_invokeInterface || refKind == REF_invokeSpecial) : this;
+                }
+                case REF_newInvokeSpecial -> {
+                    // Looked up a virtual, can get (e.g.) final String.hashCode.
+                    // Lookup up a virtual, can get a default method
                     assert (refKind == REF_invokeSpecial) : this;
                 }
                 default -> {
@@ -490,6 +502,7 @@ final class MemberName implements Member, Cloneable {
         //name.toString();  // null check
         //type.equals(type);  // null check
         // fill in fields:
+        this.refc = defClass;
         this.clazz = defClass;
         this.name = name;
         this.type = type;
@@ -554,6 +567,7 @@ final class MemberName implements Member, Cloneable {
             throw new LinkageError(m.toString());
         }
         assert(isResolved());
+        this.refc = m.getDeclaringClass();
         this.name = m.getName();
         if (this.type == null)
             this.type = new Object[] { m.getReturnType(), m.getParameterTypes() };
@@ -615,6 +629,7 @@ final class MemberName implements Member, Cloneable {
         // fill in vmtarget, vmindex while we have ctor in hand:
         MethodHandleNatives.init(this, ctor);
         assert(isResolved() && this.clazz != null);
+        this.refc = ctor.getDeclaringClass();
         this.name = CONSTRUCTOR_NAME;
         if (this.type == null)
             this.type = new Object[] { void.class, ctor.getParameterTypes() };
@@ -634,6 +649,7 @@ final class MemberName implements Member, Cloneable {
         // fill in vmtarget, vmindex while we have fld in hand:
         MethodHandleNatives.init(this, fld);
         assert(isResolved() && this.clazz != null);
+        this.refc = fld.getDeclaringClass();
         this.name = fld.getName();
         this.type = fld.getType();
         byte refKind = this.getReferenceKind();
@@ -836,6 +852,10 @@ final class MemberName implements Member, Cloneable {
             return type.toString();  // class java.lang.String
         // else it is a field, method, or constructor
         StringBuilder buf = new StringBuilder();
+//        if (getSymbolicReference() != null) {
+//            buf.append(getName(refc));
+//            buf.append(':');
+//        }
         if (getDeclaringClass() != null) {
             buf.append(getName(clazz));
             buf.append('.');

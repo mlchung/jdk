@@ -34,7 +34,8 @@ import static java.lang.invoke.MethodHandleStatics.*;
 /**
  * A symbolic reference obtained by cracking a direct method handle
  * into its constituent symbolic parts.
- * To crack a direct method handle, call {@link Lookup#revealDirect Lookup.revealDirect}.
+ * To crack a direct method handle, call {@link Lookup#revealDirect Lookup.revealDirect}
+ * or {@link Lookup#revealDirectSymbolicReference(MethodHandle) Lookup.revealDirectSymbolicReference}.
  * <h2><a id="directmh"></a>Direct Method Handles</h2>
  * A <em>direct method handle</em> represents a method, constructor, or field without
  * any intervening argument bindings or other transformations.
@@ -232,10 +233,7 @@ public interface MethodHandleInfo {
         // fields are never varargs:
         if (MethodHandleNatives.refKindIsField((byte) getReferenceKind()))
             return false;
-        // not in the public API: Modifier.VARARGS
-        final int ACC_VARARGS = 0x00000080;  // from JVMS 4.6 (Table 4.20)
-        assert(ACC_VARARGS == Modifier.TRANSIENT);
-        return Modifier.isTransient(getModifiers());
+        return (getModifiers() & AccessFlag.VARARGS.mask()) != 0;
     }
 
     /**

@@ -34,6 +34,8 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 public class SerializableObjectMethods {
 
@@ -56,6 +58,11 @@ public class SerializableObjectMethods {
     }
 
     void run() throws IOException, ClassNotFoundException {
+        F<I1, Integer> f1 = I1::hashCode;
+        F<I2, Integer> f2 = I2::hashCode;
+        f1.apply(new I1() {});
+        f2.apply(new I2() {});
+
         saveLoad((F<I1, Integer>) I1::hashCode).apply(new I1() {});
         saveLoad((F<I2, Integer>) I2::hashCode).apply(new I2() {});
     }
@@ -65,7 +72,12 @@ public class SerializableObjectMethods {
         try ( ObjectOutputStream oos = new ObjectOutputStream(out)) {
             oos.writeObject(value);
         }
-        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(out.toByteArray()))) {
+
+        byte[] bytes = out.toByteArray();
+
+        Files.write(Path.of("OIS.obj"), bytes);
+
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bytes))) {
             return (F<T, R>) ois.readObject();
         }
     }

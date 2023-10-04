@@ -138,7 +138,7 @@ import static sun.invoke.util.Wrapper.isWrapperType;
         this.implementation = implementation;
         this.implMethodType = implementation.type();
         try {
-            this.implInfo = caller.revealDirect(implementation); // may throw SecurityException
+            this.implInfo = caller.revealDirectSymbolicReference(implementation); // may throw SecurityException
         } catch (IllegalArgumentException e) {
             throw new LambdaConversionException(implementation + " is not direct or cannot be cracked");
         }
@@ -153,7 +153,15 @@ import static sun.invoke.util.Wrapper.isWrapperType;
                 break;
             case REF_invokeSpecial:
                 // JDK-8172817: should use referenced class here, but we don't know what it was
-                this.implClass = implInfo.getDeclaringClass();
+                // This actually needs the specialCaller passed to Lookup::findSpecial
+                Class<?> specialCaller = implMethodType.parameterCount() > 0
+                                                ? implMethodType.parameterType(0)
+                                                : implInfo.getDeclaringClass();
+                if (implInfo.getDeclaringClass().isAssignableFrom(specialCaller)) {
+                    this.implClass = specialCaller;
+                } else {
+                    this.implClass = implInfo.getDeclaringClass();
+                }
                 this.implIsInstanceMethod = true;
 
                 // Classes compiled prior to dynamic nestmate support invoke a private instance
@@ -164,6 +172,7 @@ import static sun.invoke.util.Wrapper.isWrapperType;
                 } else {
                     this.implKind = REF_invokeSpecial;
                 }
+                // System.out.println("LMF: invokeSpecial " + implInfo + " " + implClass + " special caller " + specialCaller);
                 break;
             case REF_invokeStatic:
             case REF_newInvokeSpecial:
@@ -175,7 +184,6 @@ import static sun.invoke.util.Wrapper.isWrapperType;
             default:
                 throw new LambdaConversionException(String.format("Unsupported MethodHandle kind: %s", implInfo));
         }
-
         this.dynamicMethodType = dynamicMethodType;
         this.isSerializable = isSerializable;
         this.altInterfaces = altInterfaces;

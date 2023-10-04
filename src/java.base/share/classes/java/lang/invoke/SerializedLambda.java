@@ -155,6 +155,10 @@ public final class SerializedLambda implements Serializable {
         this.implMethodSignature = implMethodSignature;
         this.instantiatedMethodType = instantiatedMethodType;
         this.capturedArgs = Objects.requireNonNull(capturedArgs).clone();
+        System.out.format("capturing class %s%nfunctional interface %s method name %s signature %s%n" +
+                "kind %d impl class %s method name %s signature %s%ninstantiated method type %s%n",
+                capturingClass, functionalInterfaceClass, functionalInterfaceMethodName, functionalInterfaceMethodSignature,
+                implMethodKind, implClass, implMethodName, implMethodSignature, instantiatedMethodType);
     }
 
     /**
@@ -264,6 +268,7 @@ public final class SerializedLambda implements Serializable {
      */
     @java.io.Serial
     private Object readResolve() throws ObjectStreamException {
+        System.out.println(this.toString());
         try {
             @SuppressWarnings("removal")
             Method deserialize = AccessController.doPrivileged(new PrivilegedExceptionAction<>() {

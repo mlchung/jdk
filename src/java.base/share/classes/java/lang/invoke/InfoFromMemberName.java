@@ -33,8 +33,8 @@ import java.lang.invoke.MethodHandles.Lookup;
  * Auxiliary to MethodHandleInfo, wants to nest in MethodHandleInfo but must be non-public.
  */
 /*non-public*/
-final class InfoFromMemberName implements MethodHandleInfo {
-    private final MemberName member;
+abstract class InfoFromMemberName implements MethodHandleInfo {
+    protected final MemberName member;
     private final int referenceKind;
 
     InfoFromMemberName(Lookup lookup, MemberName member, byte referenceKind) {
@@ -44,9 +44,24 @@ final class InfoFromMemberName implements MethodHandleInfo {
         this.referenceKind = referenceKind;
     }
 
-    @Override
-    public Class<?> getDeclaringClass() {
-        return member.getDeclaringClass();
+    static class SymbolicReferenceInfo extends InfoFromMemberName {
+        SymbolicReferenceInfo(Lookup lookup, MemberName member, byte referenceKind) {
+            super(lookup, member, referenceKind);
+        }
+        @Override
+        public Class<?> getDeclaringClass() {
+            return member.getSymbolicReference();
+        }
+    }
+
+    static class ResolvedMemberInfo extends InfoFromMemberName {
+        ResolvedMemberInfo(Lookup lookup, MemberName member, byte referenceKind) {
+            super(lookup, member, referenceKind);
+        }
+        @Override
+        public Class<?> getDeclaringClass() {
+            return member.getDeclaringClass();
+        }
     }
 
     @Override
@@ -98,7 +113,12 @@ final class InfoFromMemberName implements MethodHandleInfo {
         try {
             Class<?> defc = getDeclaringClass();
             byte refKind = (byte) getReferenceKind();
-            lookup.checkAccess(refKind, defc, convertToMemberName(refKind, mem));
+            // Method is invokeinterface but MethodHandle is invokeVirtual
+            //
+            MemberName newMem = convertToMemberName(refKind, mem);
+            System.out.println(member + " orig " + refKind + " " + newMem + " from " + mem);
+            newMem.referenceKindIsConsistentWith(refKind);
+            lookup.checkAccess(refKind, defc, newMem);
         } catch (IllegalAccessException ex) {
             throw new IllegalArgumentException(ex);
         }
@@ -107,8 +127,8 @@ final class InfoFromMemberName implements MethodHandleInfo {
 
     private Member reflectUnchecked() throws ReflectiveOperationException {
         byte refKind = (byte) getReferenceKind();
-        Class<?> defc = getDeclaringClass();
         boolean isPublic = Modifier.isPublic(getModifiers());
+        Class<?> defc = getDeclaringClass();
         if (MethodHandleNatives.refKindIsMethod(refKind)) {
             if (isPublic)
                 return defc.getMethod(getName(), getMethodType().parameterArray());

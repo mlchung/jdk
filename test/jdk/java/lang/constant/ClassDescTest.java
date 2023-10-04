@@ -152,6 +152,7 @@ public class ClassDescTest extends SymbolicDescTest {
 
         assertEquals(ClassDesc.of("java.lang.String"), ClassDesc.ofDescriptor("Ljava/lang/String;"));
         assertEquals(ClassDesc.of("java.lang.String"), ClassDesc.ofInternalName("java/lang/String"));
+        assertEquals(ClassDesc.of("java.lang.String"), ClassDesc.ofInternalName("java/lang/String"));
 
         ClassDesc thisClassDesc = ClassDesc.ofDescriptor("LClassDescTest;");
         assertEquals(thisClassDesc, ClassDesc.of("", "ClassDescTest"));

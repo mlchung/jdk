@@ -688,7 +688,6 @@ public class RevealDirectTest {
                         int failureMode) throws Throwable {
         boolean expectEx1 = (failureMode == FAIL_LOOKUP);   // testOnMembersNoLookup
         boolean expectEx2 = (failureMode == FAIL_REVEAL);   // testOnMembersNoReveal
-        boolean expectEx3 = (failureMode == FAIL_REFLECT);  // testOnMembersNoReflect
         for (int variation = 0; ; variation++) {
             UnreflectResult res = unreflectMember(lookup, mem, variation);
             failureModeCounts[failureMode] += 1;
@@ -721,42 +720,71 @@ public class RevealDirectTest {
                 throw ex2;
             }
             assert(consistent(res, info));
-            Member mem2;
+
+            test(mem, res, mh, info, lookup, refLookup, variation, failureMode);
+
+            MethodHandleInfo info2;
             try {
-                mem2 = info.reflectAs(Member.class, refLookup);
-                if (expectEx3)  throw new AssertionError("unexpected reflection for negative test");
-                assert(!(mem instanceof SignaturePolymorphicMethod));
-            } catch (IllegalArgumentException ex3) {
-                if (VERBOSE)  System.out.println("  "+variation+": "+info+" => (EX3)"+ex3);
-                if (expectEx3)
+                info2 = revLookup.revealDirectSymbolicReference(mh);
+                if (expectEx2)  throw new AssertionError("unexpected revelation for negative test");
+            } catch (IllegalArgumentException|SecurityException ex2) {
+                if (VERBOSE)  System.out.println("  "+variation+": "+res+" => "+mh.getClass().getName()+" => (EX2)"+ex2);
+                if (expectEx2)
                     continue;  // this is OK; we expected the reflect to fail
-                if (mem instanceof SignaturePolymorphicMethod)
-                    continue;  // this is OK; we cannot reflect MH.invokeExact(a,b,c)
                 if (failureMode != NO_FAIL)
-                    throw new AssertionError("unexpected reflection failure for negative test", ex3);
-                throw ex3;
+                    throw new AssertionError("unexpected revelation failure for negative test", ex2);
+                throw ex2;
             }
-            assert(consistent(mem, mem2));
-            UnreflectResult res2 = unreflectMember(lookup, mem2, variation);
-            MethodHandle mh2 = res2.mh;
-            assert(consistent(mh, mh2));
-            MethodHandleInfo info2 = lookup.revealDirect(mh2);
-            assert(consistent(info, info2));
-            assert(consistent(res, info2));
-            Member mem3;
-            if (hasSM())
-                mem3 = info2.reflectAs(Member.class, lookup);
-            else
-                mem3 = MethodHandles.reflectAs(Member.class, mh2);
-            assert(consistent(mem2, mem3));
-            if (hasSM()) {
-                try {
-                    MethodHandles.reflectAs(Member.class, mh2);
-                    throw new AssertionError("failed to throw on "+mem3);
-                } catch (SecurityException ex3) {
-                    // OK...
-                }
+            assert(consistent(res, info));
+            test(mem, res, mh, info2, lookup, refLookup, variation, failureMode);
+        }
+    }
+
+    void test(Member mem, UnreflectResult res, MethodHandle mh, MethodHandleInfo info,
+              Lookup lookup,      // initial lookup of member => MH
+              Lookup refLookup, // reflect info => member
+              int variation, int failureMode) throws Throwable {
+        boolean expectEx3 = (failureMode == FAIL_REFLECT);  // testOnMembersNoReflect
+        Member mem2;
+        try {
+            mem2 = info.reflectAs(Member.class, refLookup);
+            if (expectEx3) throw new AssertionError("unexpected reflection for negative test");
+            assert (!(mem instanceof SignaturePolymorphicMethod));
+        } catch (IllegalArgumentException ex3) {
+            if (VERBOSE) System.out.println("  " + variation + ": " + info + " => (EX3)" + ex3);
+            if (expectEx3)
+                return;  // this is OK; we expected the reflect to fail
+            if (mem instanceof SignaturePolymorphicMethod)
+                return;  // this is OK; we cannot reflect MH.invokeExact(a,b,c)
+            if (failureMode != NO_FAIL)
+                throw new AssertionError("unexpected reflection failure for negative test", ex3);
+            throw ex3;
+        }
+        assert (consistent(mem, mem2));
+
+        UnreflectResult res2 = unreflectMember(lookup, mem2, variation);
+        MethodHandle mh2 = res2.mh;
+        assert (consistent(mh, mh2));
+        MethodHandleInfo info2 = lookup.revealDirect(mh2);
+        assert (consistent(info, info2));
+        assert (consistent(res, info2));
+        Member mem3;
+        if (hasSM())
+            mem3 = info2.reflectAs(Member.class, lookup);
+        else
+            mem3 = MethodHandles.reflectAs(Member.class, mh2);
+        assert (consistent(mem2, mem3));
+        if (hasSM()) {
+            try {
+                MethodHandles.reflectAs(Member.class, mh2);
+                throw new AssertionError("failed to throw on " + mem3);
+            } catch (SecurityException ex3) {
+                // OK...
             }
         }
     }
+
+
+
+
 }

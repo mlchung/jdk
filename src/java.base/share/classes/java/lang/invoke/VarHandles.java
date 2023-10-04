@@ -28,6 +28,7 @@ package java.lang.invoke;
 import jdk.internal.foreign.Utils;
 import sun.invoke.util.Wrapper;
 
+import java.lang.invoke.InfoFromMemberName.ResolvedMemberInfo;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -620,7 +621,7 @@ final class VarHandles {
     static Class<?>[] exceptionTypes(MethodHandle handle) {
         if (handle instanceof DirectMethodHandle directHandle) {
             byte refKind = directHandle.member.getReferenceKind();
-            MethodHandleInfo info = new InfoFromMemberName(
+            MethodHandleInfo info = new ResolvedMemberInfo(
                     MethodHandles.Lookup.IMPL_LOOKUP,
                     directHandle.member,
                     refKind);
