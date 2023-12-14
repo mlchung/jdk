@@ -26,7 +26,6 @@ package jdk.tools.jlink.internal;
 
 import java.lang.module.Configuration;
 import java.lang.module.ModuleFinder;
-import java.nio.ByteOrder;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -148,6 +147,8 @@ public final class Jlink {
         private final Path output;
         private final Set<String> modules;
         private final ModuleFinder finder;
+        private final boolean useModulePath;
+        private final boolean singleHop;
 
         /**
          * jlink configuration,
@@ -158,10 +159,14 @@ public final class Jlink {
          */
         public JlinkConfiguration(Path output,
                                   Set<String> modules,
-                                  ModuleFinder finder) {
+                                  ModuleFinder finder,
+                                  boolean useModulePath,
+                                  boolean singleHop) {
             this.output = output;
             this.modules = Objects.requireNonNull(modules);
             this.finder = finder;
+            this.useModulePath = useModulePath;
+            this.singleHop = singleHop;
         }
 
         /**
@@ -184,6 +189,14 @@ public final class Jlink {
          */
         public ModuleFinder finder() {
             return finder;
+        }
+
+        public boolean useModulePath() {
+            return useModulePath;
+        }
+
+        public boolean singleHop() {
+            return singleHop;
         }
 
         /**

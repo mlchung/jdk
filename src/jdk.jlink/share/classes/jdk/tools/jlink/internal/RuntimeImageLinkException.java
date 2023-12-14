@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2023, Red Hat, Inc.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,26 +23,25 @@
  * questions.
  */
 
-package jdk.tools.jlink.internal.plugins;
-
-import java.util.List;
+package jdk.tools.jlink.internal;
 
 /**
- * Plugin to add VM command-line options, by storing them in a resource
- * that's read by the VM at startup
+ * Exception thrown for links without packaged modules. I.e. run-image link.
+ *
  */
-public final class AddOptionsPlugin extends AddResourcePlugin {
+public class RuntimeImageLinkException extends IllegalStateException {
 
-    private static final String OPTS_FILE = "/java.base/jdk/internal/vm/options";
+    private static final long serialVersionUID = -1848914673073119403L;
 
-    public AddOptionsPlugin() {
-        super("add-options", OPTS_FILE);
+    private final IllegalArgumentException iae;
+
+    public RuntimeImageLinkException(IllegalArgumentException cause) {
+        super(cause);
+        this.iae = cause;
     }
 
-    // Filter the file we create for run-time image based links
-    @Override
-    public List<String> getExcludePatterns() {
-        return List.of("glob:" + AddOptionsPlugin.OPTS_FILE);
+    public IllegalArgumentException getReason() {
+        return iae;
     }
 
 }

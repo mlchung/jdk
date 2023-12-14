@@ -63,10 +63,15 @@ public final class ImagePluginConfiguration {
     private ImagePluginConfiguration() {
     }
 
+    public static ImagePluginStack parseConfiguration(Jlink.PluginsConfiguration pluginsConfiguration)
+            throws Exception {
+        return parseConfiguration(pluginsConfiguration, null);
+    }
+
     /*
      * Create a stack of plugins from a configuration.
      */
-    public static ImagePluginStack parseConfiguration(Jlink.PluginsConfiguration pluginsConfiguration)
+    public static ImagePluginStack parseConfiguration(Jlink.PluginsConfiguration pluginsConfiguration, List<String> cli)
             throws Exception {
         if (pluginsConfiguration == null) {
             return new ImagePluginStack();
@@ -130,6 +135,6 @@ public final class ImagePluginConfiguration {
             };
         }
 
-        return new ImagePluginStack(builder, orderedPlugins, lastSorter);
+        return new ImagePluginStack(builder, orderedPlugins, lastSorter, cli);
     }
 }

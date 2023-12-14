@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2023, Red Hat, Inc.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,26 +21,22 @@
  * questions.
  */
 
-package jdk.tools.jlink.internal.plugins;
+import jdk.test.lib.process.OutputAnalyzer;
 
-import java.util.List;
+class CapturingHandler extends AbstractJmodLessTest.OutputAnalyzerHandler {
 
-/**
- * Plugin to add VM command-line options, by storing them in a resource
- * that's read by the VM at startup
- */
-public final class AddOptionsPlugin extends AddResourcePlugin {
+    private OutputAnalyzer output;
 
-    private static final String OPTS_FILE = "/java.base/jdk/internal/vm/options";
-
-    public AddOptionsPlugin() {
-        super("add-options", OPTS_FILE);
+    public String stdErr() {
+        return output.getStderr();
     }
 
-    // Filter the file we create for run-time image based links
+    public OutputAnalyzer analyzer() {
+        return output;
+    }
+
     @Override
-    public List<String> getExcludePatterns() {
-        return List.of("glob:" + AddOptionsPlugin.OPTS_FILE);
+    public void handleAnalyzer(OutputAnalyzer out) {
+        this.output = out;
     }
-
 }
