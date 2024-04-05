@@ -1600,6 +1600,59 @@ class Backtrace: AllStatic {
   friend class JavaClasses;
 };
 
+#define BACKTRACE_INJECTED_FIELDS(macro)                               \
+  macro(java_lang_BackTrace, names,  intptr_array_signature, false)
+
+class java_lang_BackTrace: AllStatic {
+private:
+  static int _methods_offset;
+  static int _bcis_offset;
+  static int _classes_offset;
+  static int _names_offset;
+  static int _numFrames_offset;
+  static int _hidden_offset;
+  static int _next_offset;
+
+public:
+
+  static void fill_in_elements(Handle backtrace, InstanceKlass* ik, objArrayHandle elements, int depth, TRAPS);
+  static void push(Handle backtrace, int index, const methodHandle& method, int bci, TRAPS);
+  static void init_names(Handle backtrace, TRAPS);
+  static void dump(Handle backtrace, TRAPS);
+  static Handle expand(Handle backtrace, TRAPS);
+  static Handle allocate(TRAPS);
+
+  static typeArrayOop methods(oop obj);
+  static typeArrayOop bcis(oop obj);
+  static objArrayOop classes(oop obj);
+  static typeArrayOop names(oop obj);
+  static oop next(oop obj);
+  static int num_frames(oop obj);
+  static bool has_hidden_top_frame(oop obj);
+  
+  static void set_numFrames(oop obj, int value);
+  static void set_has_hidden_top_frame(oop obj, bool value);
+  static void set_next(oop obj, oop value);
+  static void set_methods(oop obj, oop value);
+  static void set_bcis(oop obj, oop value);
+  static void set_classes(oop obj, oop value);
+  static void set_names(oop obj, oop value);
+
+  static void compute_offsets();
+  static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
+
+  // Debugging
+  friend class JavaClasses;
+};
+
+class java_lang_BackTrace_Element: AllStatic {
+private:
+
+public:
+  // Debugging
+  friend class JavaClasses;
+};
+
 class java_lang_ClassFrameInfo: AllStatic {
 private:
   static int _classOrMemberName_offset;
@@ -1610,8 +1663,10 @@ public:
   static int  flags(oop info);
 
   // Setters
-  static void init_class(Handle stackFrame, const methodHandle& m);
-  static void init_method(Handle stackFrame, const methodHandle& m, TRAPS);
+  static void init_flags(Handle stackFrame, const methodHandle& m);
+
+  static void set_classOrMemberName(oop info, oop value);
+  static void set_flags(oop info, int value);
 
   static void compute_offsets();
   static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
@@ -1632,11 +1687,14 @@ private:
   static int _bci_offset;
   static int _version_offset;
   static int _contScope_offset;
+  static int _ste_offset;
 
 public:
   // Getters
   static oop name(oop info);
   static oop type(oop info);
+  static oop stack_trace_element(oop info);
+
   static Method* get_method(oop info);
 
   // Setters

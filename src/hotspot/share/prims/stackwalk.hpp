@@ -50,6 +50,7 @@ private:
   jlong                 _anchor;
 
 protected:
+
   void fill_stackframe(Handle stackFrame, const methodHandle& method, TRAPS);
 public:
   BaseFrameStream(JavaThread* thread, Handle continuation);
@@ -66,6 +67,7 @@ public:
   virtual void    fill_frame(int index, objArrayHandle  frames_array,
                              const methodHandle& method, TRAPS)=0;
 
+  JavaThread* thread() { return _thread; }
   oop continuation() { return _continuation(); }
   void set_continuation(Handle cont);
 
@@ -88,6 +90,7 @@ class JavaFrameStream : public BaseFrameStream {
 private:
   vframeStream          _vfst;
   bool                  _need_method_info;
+  bool                  _use_backtrace;
 
 public:
   JavaFrameStream(JavaThread* thread, jint mode, Handle cont_scope, Handle cont);
@@ -100,6 +103,37 @@ public:
   Method* method() override { return _vfst.method(); }
   int bci()        override { return _vfst.bci(); }
   oop cont()       override { return _vfst.continuation(); }
+
+  void fill_frame(int index, objArrayHandle  frames_array,
+                  const methodHandle& method, TRAPS) override;
+};
+
+class RawFrameStream : public BaseFrameStream {
+private:
+  Handle                _cont_scope;  // the delimitation of this walk
+  RegisterMap*          _map;
+  frame                 _frame;
+  bool                  _need_method_info;
+  bool                  _use_backtrace;
+  int _decode_offset;
+  nmethod* _nm;
+  Method* _method;
+  int _bci;
+  ContinuationEntry*  _cont_entry;
+
+ enum { interpreted_mode, compiled_mode, at_end_mode } _mode;
+
+public:
+  RawFrameStream(JavaThread* thread, jint mode, RegisterMap* rm, Handle cont_scope, Handle cont);
+
+  const RegisterMap* reg_map() override { return _map; };
+
+  void next()   override;
+  bool at_end() override { return _mode == at_end_mode; }
+
+  Method* method() override { return _method; }
+  int bci()        override { return _bci; }
+  oop cont()       override { return continuation() != nullptr ? continuation(): ContinuationEntry::cont_oop_or_null(_cont_entry, _map->thread()); }
 
   void fill_frame(int index, objArrayHandle  frames_array,
                   const methodHandle& method, TRAPS) override;
@@ -157,6 +191,10 @@ private:
 public:
   static inline bool need_method_info(jint mode) {
     return (mode & JVM_STACKWALK_CLASS_INFO_ONLY) == 0;
+  }
+
+  static inline bool use_backtrace(jint mode) {
+    return (mode & JVM_STACKWALK_BACKTRACE) != 0;
   }
 
   static oop walk(Handle stackStream, jint mode, int skip_frames, Handle cont_scope, Handle cont,

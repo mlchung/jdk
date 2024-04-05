@@ -33,8 +33,12 @@ import java.lang.annotation.Native;
 import java.lang.reflect.Array;
 import java.lang.reflect.Method;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Parameter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
@@ -79,6 +83,7 @@ final class StackStreamFactory {
     // These flags must match the values maintained in the VM
     @Native private static final int DEFAULT_MODE              = 0x0;
     @Native private static final int CLASS_INFO_ONLY           = 0x2;
+    @Native private static final int BACK_TRACE = 0x4;
     @Native private static final int SHOW_HIDDEN_FRAMES        = 0x20;  // LambdaForms are hidden by the VM
     @Native private static final int FILL_LIVE_STACK_FRAMES    = 0x100;
 
@@ -98,6 +103,11 @@ final class StackStreamFactory {
         } else {
             return new StackFrameTraverser<>(walker, function);
         }
+    }
+
+    static <T> BackTraceTraverser<T>
+        makeBackTraceTraverser(StackWalker walker, Function<? super Stream<StackFrame>, ? extends T> function) {
+        return new BackTraceTraverser<>(walker, function);
     }
 
     /**
@@ -373,7 +383,7 @@ final class StackStreamFactory {
 
         private void setContinuation(Continuation cont) {
             this.continuation = cont;
-            setContinuation(anchor, frameBuffer.frames(), cont);
+            setContinuation(anchor, frameBuffer.buffer(), cont);
         }
 
         /*
@@ -420,12 +430,11 @@ final class StackStreamFactory {
         private R beginStackWalk() {
             // initialize buffers for VM to fill the stack frame info
             initFrameBuffer();
-
             return callStackWalk(mode, 0,
                                  contScope, continuation,
                                  frameBuffer.currentBatchSize(),
                                  frameBuffer.startIndex(),
-                                 frameBuffer.frames());
+                                 frameBuffer.buffer());
         }
 
         /*
@@ -441,15 +450,14 @@ final class StackStreamFactory {
 
             // If the last batch didn't fetch any frames, keep the current batch size.
             int lastBatchFrameCount = frameBuffer.numFrames();
-            int batchSize = getNextBatchSize();
-            frameBuffer.resize(batchSize);
+            frameBuffer.resize(getNextBatchSize());
 
             int numFrames = fetchStackFrames(mode, anchor, lastBatchFrameCount,
-                                             batchSize, startIndex,
-                                             frameBuffer.frames());
+                                             frameBuffer.currentBatchSize(), startIndex,
+                                             frameBuffer.buffer());
             if (isDebug) {
                 System.out.format("  more stack walk got %d frames start %d batch size %d%n",
-                                  numFrames, frameBuffer.startIndex(), batchSize);
+                                  numFrames, frameBuffer.startIndex(), frameBuffer.currentBatchSize());
             }
             frameBuffer.setBatch(depth, startIndex, numFrames);
             return numFrames;
@@ -465,14 +473,14 @@ final class StackStreamFactory {
          * @param continuation the continuation to walk, or {@code null} if walking a thread.
          * @param bufferSize  the buffer size
          * @param startIndex  start index of the frame buffers to be filled.
-         * @param frames      Either a {@link ClassFrameInfo} array, if mode is {@link #CLASS_INFO_ONLY}
+         * @param buffer      Either a {@link ClassFrameInfo} array, if mode is {@link #CLASS_INFO_ONLY}
          *                    or a {@link StackFrameInfo} (or derivative) array otherwise.
          * @return            Result of AbstractStackWalker::doStackWalk
          */
         private native R callStackWalk(int mode, int skipframes,
                                        ContinuationScope contScope, Continuation continuation,
                                        int bufferSize, int startIndex,
-                                       T[] frames);
+                                       Object[] buffer);
 
         /**
          * Fetch the next batch of stack frames.
@@ -482,16 +490,16 @@ final class StackStreamFactory {
          * @param lastBatchFrameCount the number of frames filled in the last batch.
          * @param bufferSize  the buffer size
          * @param startIndex  start index of the frame buffers to be filled.
-         * @param frames      Either a {@link ClassFrameInfo} array, if mode is {@link #CLASS_INFO_ONLY}
+         * @param buffer      Either a {@link ClassFrameInfo} array, if mode is {@link #CLASS_INFO_ONLY}
          *                    or a {@link StackFrameInfo} (or derivative) array otherwise.
          *
          * @return the number of frames filled in this batch
          */
         private native int fetchStackFrames(int mode, long anchor, int lastBatchFrameCount,
                                             int bufferSize, int startIndex,
-                                            T[] frames);
+                                            Object[] buffer);
 
-        private native void setContinuation(long anchor, T[] frames, Continuation cont);
+        private native void setContinuation(long anchor, Object[] buffer, Continuation cont);
     }
 
     /*
@@ -511,7 +519,13 @@ final class StackStreamFactory {
 
         StackFrameTraverser(StackWalker walker,
                             Function<? super Stream<StackFrame>, ? extends T> function) {
-            super(walker, toStackWalkMode(walker, DEFAULT_MODE));
+            this(walker, function, DEFAULT_MODE);
+        }
+
+        StackFrameTraverser(StackWalker walker,
+                            Function<? super Stream<StackFrame>, ? extends T> function,
+                            int mode) {
+            super(walker, toStackWalkMode(walker, mode));
             this.function = function;
         }
 
@@ -552,7 +566,7 @@ final class StackStreamFactory {
                 // First batch, use estimateDepth if not exceed the large batch size
                 return walker.estimateDepth() == 0
                         ? SMALL_BATCH
-                        : Math.min(walker.estimateDepth() + RESERVED_ELEMENTS, LARGE_BATCH_SIZE);
+                        : Math.min(walker.estimateDepth() + RESERVED_ELEMENTS + 4, LARGE_BATCH_SIZE);
             } else {
                 // expand only if last batch was full and the buffer size <= 32
                 // to minimize the number of unneeded frames decoded.
@@ -628,7 +642,7 @@ final class StackStreamFactory {
         }
 
         @Override
-        T[] frames() {
+        Object[] buffer() {
             return stackFrames;
         }
 
@@ -807,7 +821,7 @@ final class StackStreamFactory {
      *
      * Each specialized AbstractStackWalker subclass may subclass the FrameBuffer.
      */
-    abstract static class FrameBuffer<F> {
+    abstract static class FrameBuffer<T> {
         static final int START_POS = RESERVED_ELEMENTS;
 
         // buffers for VM to fill stack frame info
@@ -835,7 +849,7 @@ final class StackStreamFactory {
          * @return An array of frames that may be used to store frame objects
          * when walking the stack. Must not be null.
          */
-        abstract F[] frames(); // must not return null
+        abstract Object[] buffer(); // must not return null
 
         /**
          * Resizes the buffers for VM to fill in the next batch of stack frames.
@@ -871,7 +885,7 @@ final class StackStreamFactory {
         /**
          * Returns next StackFrame object in the current batch of stack frames
          */
-        F nextStackFrame() {
+        T nextStackFrame() {
             throw new InternalError("should not reach here");
         }
 
@@ -884,14 +898,14 @@ final class StackStreamFactory {
         /*
          * Tests if this frame buffer is empty.  All frames are fetched.
          */
-        final boolean isEmpty() {
+        boolean isEmpty() {
             return origin >= fence || (origin == START_POS && fence == 0);
         }
 
         /*
          * Returns the number of stack frames filled in the current batch
          */
-        final int numFrames() {
+        int numFrames() {
             if (!isActive())
                 throw new IllegalStateException();
             return fence - startIndex();
@@ -900,7 +914,7 @@ final class StackStreamFactory {
         /*
          * Freezes this frame buffer.  The stack stream source is done fetching.
          */
-        final void freeze() {
+        void freeze() {
             origin = 0;
             fence = 0;
         }
@@ -909,11 +923,11 @@ final class StackStreamFactory {
          * Tests if this frame buffer is active.  It is inactive when
          * it is done for traversal.
          */
-        final boolean isActive() {
+        boolean isActive() {
             return origin > 0;
         }
 
-        final boolean isFull() {
+        boolean isFull() {
             return fence == currentBatchSize;
         }
 
@@ -921,7 +935,7 @@ final class StackStreamFactory {
          * Tests if this frame buffer is at the end of the stack
          * and all frames have been traversed.
          */
-        final boolean isAtBottom() {
+        boolean isAtBottom() {
             return origin > 0 && origin >= fence && fence < currentBatchSize;
         }
 
@@ -945,7 +959,7 @@ final class StackStreamFactory {
         /**
          * Gets the class at the current frame.
          */
-        final Class<?> get() {
+        Class<?> get() {
             if (isEmpty()) {
                 throw new NoSuchElementException("origin=" + origin + " fence=" + fence);
             }
@@ -955,14 +969,14 @@ final class StackStreamFactory {
         /*
          * Returns the index of the current frame.
          */
-        final int getIndex() {
+        int getIndex() {
             return origin;
         }
 
         /*
          * Set a new batch of stack frames that have been filled in this frame buffer.
          */
-        final void setBatch(int depth, int startIndex, int numFrames) {
+        void setBatch(int depth, int startIndex, int numFrames) {
             if (startIndex <= 0 || numFrames < 0)
                 throw new IllegalArgumentException("startIndex=" + startIndex
                         + " numFrames=" + numFrames);
@@ -982,12 +996,231 @@ final class StackStreamFactory {
         /*
          * Checks if the origin is the expected start index.
          */
-        final void check(int skipFrames) {
+        void check(int skipFrames) {
             int index = skipFrames + START_POS;
             if (origin != index) {
                 // stack walk must continue with the previous frame depth
                 throw new IllegalStateException("origin " + origin + " != " + index);
             }
+        }
+    }
+
+    static class BackTraceBuffer extends FrameBuffer<BackTrace.Element> {
+        final StackWalker walker;
+        private BackTrace backtrace;
+        private BackTrace[] buffer;
+
+        private int chunkIndex;
+
+        BackTraceBuffer(StackWalker walker, int initialBatchSize) {
+            super(initialBatchSize);
+            this.walker = walker;
+            this.chunkIndex = startIndex();
+            int len = chunkIndex + (initialBatchSize - RESERVED_ELEMENTS) / BackTrace.CHUNK_SIZE + 1;
+            this.buffer = new BackTrace[len];
+            this.currentBatchSize = len;
+            BackTrace prev = null;
+            int count = 0;
+            for (int i=chunkIndex; i < len; i++) {
+                var bt = buffer[i] = new BackTrace(walker);
+                if (prev != null) {
+                    prev.setNext(bt);
+                }
+                prev = bt;
+                count += BackTrace.CHUNK_SIZE;
+            }
+            this.backtrace = buffer[chunkIndex];
+            if (isDebug) {
+                System.out.format("BackTraceBuffer backtrace %s start %d len %d max frames %d%n", backtrace, chunkIndex, len, count);
+            }
+        }
+
+        @Override
+        Object[] buffer() {
+            return buffer;
+        }
+
+        int backTraceSize() {
+            int numChunks = buffer.length - RESERVED_ELEMENTS;
+            return numChunks * BackTrace.CHUNK_SIZE;
+        }
+
+        @Override
+        void resize(int size) {
+            if (!isActive())
+                throw new IllegalStateException("inactive frame buffer can't be resized");
+
+            assert startIndex() == START_POS :
+                    "bad start index " + startIndex() + " expected " + START_POS;
+
+            BackTrace prev = buffer[buffer.length-1];
+            assert prev != null;
+            if (backTraceSize() < size) {
+                int len = startIndex() + (size / BackTrace.CHUNK_SIZE) + 1;
+                BackTrace[] newChunks = new BackTrace[len];
+                // copy initial magic...
+                System.arraycopy(buffer, 0, newChunks, 0, startIndex());
+                this.buffer = newChunks;
+                this.currentBatchSize = len;
+            }
+            this.chunkIndex = startIndex();
+            for (int i = chunkIndex; i < buffer.length; i++) {
+                var bt = buffer[i] = new BackTrace(walker);
+                prev.setNext(bt);
+                prev = bt;
+            }
+        }
+
+        @Override
+        boolean isEmpty() {
+            return origin >= fence || (chunkIndex == START_POS && fence == 0);
+        }
+
+        @Override
+        boolean isAtBottom() {
+            return chunkIndex > 0 && origin >= fence && (origin % 32) != 0 && chunkIndex < currentBatchSize;
+        }
+
+        @Override
+        BackTrace.Element nextStackFrame() {
+            if (isEmpty()) {
+                throw new NoSuchElementException("origin=" + origin + " fence=" + fence);
+            }
+
+            int index = origin % 32;
+            if (origin > 0 && index == 0) {
+                // advance to next chunk
+                chunkIndex++;
+            }
+            BackTrace.Element frame = buffer[chunkIndex].elements()[index];
+            origin++;
+            return frame;
+        }
+
+        void freeze() {
+            origin = 0;
+            fence = 0;
+            chunkIndex = 0;
+        }
+
+        boolean isActive() {
+            return chunkIndex > 0;
+        }
+
+        boolean isFull() {
+            return (chunkIndex == currentBatchSize-START_POS) && buffer[chunkIndex].chunkSize() == BackTrace.CHUNK_SIZE;
+        }
+
+        int numFrames() {
+            if (!isActive())
+                throw new IllegalStateException();
+            return fence;
+        }
+
+        void setBatch(int depth, int startIndex, int numFrames) {
+            if (startIndex <= 0 || numFrames < 0)
+                throw new IllegalArgumentException("startIndex=" + startIndex
+                        + " numFrames=" + numFrames);
+
+            this.chunkIndex = startIndex;
+            this.origin = 0;
+            this.fence =  numFrames;
+            for (int chunk = startIndex; chunk < fence;) {
+                int i = origin / 32 + startIndex;
+                assert i == chunk : "mismatch chunk index " + chunk + " vs " + i;
+                if (isDebug) System.err.format("  frame %d (chunk %d): %s%n", origin, i, at(origin));
+                if (depth == 0 && filterStackWalkImpl(at(origin))) { // filter the frames due to the stack stream implementation
+                    origin++;
+                } else {
+                    break;
+                }
+                if ((origin % 32) == 0) {
+                    chunk++;
+                }
+            }
+
+        }
+
+        /*
+         * Checks if the origin is the expected start index.
+         */
+        void check(int skipFrames) {
+            int index = skipFrames + START_POS;
+            if (chunkIndex != index) {
+                // stack walk must continue with the previous frame depth
+                throw new IllegalStateException("chunkIndex " + chunkIndex + " != " + index);
+            }
+        }
+
+        @Override
+        final Class<?> at(int index) {
+            int chunk = index / 32 + START_POS;
+            return buffer[chunk].classAt(index % 32);
+        }
+
+        List<StackFrame> toList(int depth) {
+            StackFrame[] array = new StackFrame[depth];
+            int index = 0;
+            for (int i = startIndex(); index < depth && i < currentBatchSize; i++) {
+                BackTrace.Element[] elements = buffer[i].elements();
+                int len = Math.min(depth-index, elements.length);
+                System.arraycopy(elements, 0, array, index, len);
+                index = index+len;
+            }
+            if (index < depth) {
+                StackFrame[] newArray = new StackFrame[index];
+                System.arraycopy(array, 0, newArray, 0, index);
+                array = newArray;
+            }
+            return List.of(array);
+        }
+    }
+
+    static class BackTraceTraverser<T> extends StackFrameTraverser<T>
+            implements Spliterator<StackFrame>
+    {
+        static {
+            stackWalkImplClasses.add(BackTraceTraverser.class);
+        }
+        BackTraceTraverser(StackWalker walker,
+                           Function<? super Stream<StackFrame>, ? extends T> function) {
+            super(walker, function, BACK_TRACE);
+        }
+
+        @Override
+        protected void initFrameBuffer() {
+            this.frameBuffer = new BackTraceBuffer(walker, getNextBatchSize());
+        }
+
+        @Override
+        protected int batchSize(int lastBatchSize) {
+            if (lastBatchSize == 0) {
+                return walker.estimateDepth() == 0
+                        ? BackTrace.CHUNK_SIZE
+                        : walker.estimateDepth() + RESERVED_ELEMENTS + 4;
+            } else {
+                return Math.max(BackTrace.CHUNK_SIZE, lastBatchSize);
+            }
+        }
+
+        @Override
+        protected T consumeFrames() {
+            checkState(OPEN);
+            if (function != null) {
+                Stream<StackFrame> stream = StreamSupport.stream(this, false);
+                return function.apply(stream);
+            }
+            return null;
+        }
+
+        List<StackFrame> toList(int depth){
+            walk();
+            return ((BackTraceBuffer)frameBuffer).toList(depth);
+        }
+
+        StackWalker.Backtrace snapshot(){
+            walk();
+            return ((BackTraceBuffer)frameBuffer).backtrace;
         }
     }
 

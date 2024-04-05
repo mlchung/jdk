@@ -259,6 +259,7 @@ class SerializeClosure;
   template(java_lang_VirtualMachineError,             "java/lang/VirtualMachineError")            \
   template(java_lang_StackOverflowError,              "java/lang/StackOverflowError")             \
   template(java_lang_StackTraceElement,               "java/lang/StackTraceElement")              \
+  template(java_lang_StackTraceElement_signature,     "Ljava/lang/StackTraceElement;")            \
                                                                                                   \
   /* Concurrency support */                                                                       \
   template(java_util_concurrent_locks_AbstractOwnableSynchronizer,           "java/util/concurrent/locks/AbstractOwnableSynchronizer") \
@@ -369,6 +370,8 @@ class SerializeClosure;
   template(DEFAULT_CONTEXT_name,                      "DEFAULT_CONTEXT")                          \
   NOT_LP64(  do_alias(intptr_signature,               int_signature)  )                           \
   LP64_ONLY( do_alias(intptr_signature,               long_signature) )                           \
+  NOT_LP64(  do_alias(intptr_array_signature,         int_array_signature)  )                     \
+  LP64_ONLY( do_alias(intptr_array_signature,         long_array_signature) )                     \
   /* Foreign API Support */                                                                       \
   template(jdk_internal_foreign_abi_NativeEntryPoint,                "jdk/internal/foreign/abi/NativeEntryPoint") \
   template(jdk_internal_foreign_abi_ABIDescriptor,                   "jdk/internal/foreign/abi/ABIDescriptor") \
@@ -381,15 +384,19 @@ class SerializeClosure;
   /* Support for JVMCI */                                                                         \
   JVMCI_VM_SYMBOLS_DO(template, do_alias)                                                         \
                                                                                                   \
+  template(java_lang_BackTrace,                       "java/lang/BackTrace")                      \
+  template(java_lang_BackTrace_Element,               "java/lang/BackTrace$Element")              \
   template(java_lang_ClassFrameInfo,                  "java/lang/ClassFrameInfo")                 \
   template(java_lang_StackWalker,                     "java/lang/StackWalker")                    \
   template(java_lang_StackFrameInfo,                  "java/lang/StackFrameInfo")                 \
   template(java_lang_LiveStackFrameInfo,              "java/lang/LiveStackFrameInfo")             \
   template(java_lang_StackStreamFactory_AbstractStackWalker, "java/lang/StackStreamFactory$AbstractStackWalker") \
+  template(java_lang_BackTrace_signature,             "Ljava/lang/BackTrace;")                    \
   template(doStackWalk_signature,                     "(JIIII)Ljava/lang/Object;")                \
   template(asPrimitive_name,                          "asPrimitive")                              \
   template(asPrimitive_int_signature,                 "(I)Ljava/lang/LiveStackFrame$PrimitiveSlot;") \
   template(asPrimitive_long_signature,                "(J)Ljava/lang/LiveStackFrame$PrimitiveSlot;") \
+  template(newBackTrace_name,                          "newBackTrace")                            \
                                                                                                   \
   /* common method and field names */                                                             \
   template(object_initializer_name,                   "<init>")                                   \
@@ -494,6 +501,7 @@ class SerializeClosure;
   template(vmindex_name,                              "vmindex")                                  \
   template(vmcount_name,                              "vmcount")                                  \
   template(flags_name,                                "flags")                                    \
+  template(names_name,                                "names")                                    \
   template(basicType_name,                            "basicType")                                \
   template(append_name,                               "append")                                   \
   template(klass_name,                                "klass")                                    \
@@ -591,6 +599,7 @@ class SerializeClosure;
   template(char_array_signature,                      "[C")                                       \
   template(int_array_signature,                       "[I")                                       \
   template(long_array_signature,                      "[J")                                       \
+  template(short_array_signature,                     "[S")                                       \
   template(runnable_signature,                        "Ljava/lang/Runnable;")                     \
   template(continuation_signature,                    "Ljdk/internal/vm/Continuation;")           \
   template(continuationscope_signature,               "Ljdk/internal/vm/ContinuationScope;")      \

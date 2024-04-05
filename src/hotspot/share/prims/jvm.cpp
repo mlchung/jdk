@@ -565,6 +565,17 @@ JVM_ENTRY(void, JVM_ExpandStackFrameInfo(JNIEnv *env, jobject obj))
   }
 JVM_END
 
+
+JVM_ENTRY(void, JVM_FillBackTraceElements(JNIEnv *env, jobject backtrace, jclass cls, jobjectArray elements, jint depth))
+  Handle backtraceh(THREAD, JNIHandles::resolve_non_null(backtrace));
+  InstanceKlass* ik = InstanceKlass::cast(java_lang_Class::as_Klass(JNIHandles::resolve_non_null(cls)));
+
+  objArrayOop st = objArrayOop(JNIHandles::resolve_non_null(elements));
+
+  objArrayHandle backtrace_elements(THREAD, st);
+  java_lang_BackTrace::fill_in_elements(backtraceh, ik, backtrace_elements, depth, CHECK);
+JVM_END
+
 JVM_ENTRY(jobject, JVM_CallStackWalk(JNIEnv *env, jobject stackStream, jint mode,
                                      jint skip_frames, jobject contScope, jobject cont,
                                      jint buffer_size, jint start_index, jobjectArray frames))

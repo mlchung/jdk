@@ -173,7 +173,7 @@ public final class StackTraceElement implements java.io.Serializable {
      * Private constructor for the factory methods to create StackTraceElement
      * for Throwable and StackFrameInfo
      */
-    private StackTraceElement() {}
+    /* package-private */ StackTraceElement() {}
 
     /**
      * Returns the name of the source file containing the execution point
